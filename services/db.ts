@@ -4,9 +4,12 @@ import { Lead, IntakeSession, IntakeMessage, Project, ProjectStatus, AdminUser }
 // ============================================================================
 // CONFIGURAÇÃO SUPABASE
 // ============================================================================
-// URL REST da API do seu projeto (não o endereço do Pooler do banco)
-const SUPABASE_URL = 'https://xrslfoismvmvbaeendfg.supabase.co'; 
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhyc2xmb2lzbXZtdmJhZWVuZGZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE5NDk2MDksImV4cCI6MjA4NzUyNTYwOX0.sfNke1Cn1eBmkK9wiFPmIHLcr3iRF2t7nEFBVVY_k9g';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  throw new Error('Supabase credentials are missing. Check your .env file.');
+}
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
