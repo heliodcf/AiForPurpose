@@ -6,6 +6,12 @@ const generateId = () => Math.random().toString(36).substring(2, 15);
 // Simulates API delay
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+/**
+ * ⚠️ AVISO DE SEGURANÇA ⚠️
+ * Este arquivo (mockDb.ts) é APENAS para desenvolvimento local e testes.
+ * NUNCA utilize este arquivo em um ambiente de produção.
+ * Em produção, utilize a integração real com o Supabase (db.ts).
+ */
 class MockDatabase {
   constructor() {
     this.initMasterAdmin();
@@ -25,10 +31,14 @@ class MockDatabase {
     const users = this.get<any>('admin_users');
     if (users.length === 0) {
       // Create default master admin if none exists
+      // Utiliza variáveis de ambiente para evitar credenciais hardcoded
+      const adminEmail = import.meta.env.VITE_MOCK_ADMIN_EMAIL || 'admin@aiforpurpose.com';
+      const adminPassword = import.meta.env.VITE_MOCK_ADMIN_PASSWORD || 'admin';
+      
       this.set('admin_users', [{
         id: 'master-admin-id',
-        email: 'admin@aiforpurpose.com',
-        password: 'admin', // In a real app, this would be hashed!
+        email: adminEmail,
+        password: adminPassword, // In a real app, this would be hashed!
         name: 'Master Admin',
         role: 'master',
         created_at: new Date().toISOString()
@@ -176,15 +186,25 @@ class MockDatabase {
     };
   }
 
-  async getLeadsWithDetails() {
+  async getLeadsWithDetails(page: number = 1, limit: number = 10) {
     await delay(300);
     const leads = this.get<Lead>('leads');
     const sessions = this.get<IntakeSession>('sessions');
 
-    return leads.map(lead => {
+    const formattedData = leads.map(lead => {
       const session = sessions.find(s => s.lead_id === lead.id);
       return { ...lead, session };
     }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+    const offset = (page - 1) * limit;
+    const paginatedData = formattedData.slice(offset, offset + limit);
+
+    return {
+      data: paginatedData,
+      totalCount: formattedData.length,
+      page,
+      limit
+    };
   }
 }
 

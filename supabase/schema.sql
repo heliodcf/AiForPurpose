@@ -152,6 +152,9 @@ CREATE POLICY "Admins can update profiles" ON public.profiles FOR UPDATE USING (
 
 -- 2. Leads
 -- Admins podem ler, atualizar e deletar. Usuários anônimos/visitantes podem INSERIR.
+-- NOTA DE SEGURANÇA: Em produção, é altamente recomendado implementar Rate Limiting
+-- no Supabase (ex: via pg_stat_statements ou middleware Edge Functions) para evitar
+-- spam de inserções anônimas na tabela de leads.
 CREATE POLICY "Admins full access on leads" ON public.leads FOR ALL USING (public.is_admin());
 CREATE POLICY "Anon can insert leads" ON public.leads FOR INSERT WITH CHECK (true);
 

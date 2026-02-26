@@ -3,6 +3,7 @@ import { AgentStep, IntakeMessage } from '../types';
 import { db } from '../services/db';
 import { IconBot, IconX, IconSend } from './Icons';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useRouter } from '../contexts/RouterContext';
 
 interface ChatState {
   step: AgentStep;
@@ -26,7 +27,7 @@ interface ChatState {
 
 export const AgentWidget: React.FC = () => {
   const { t, language } = useLanguage();
-  const [isOpen, setIsOpen] = useState(false);
+  const { isAgentOpen, openAgent, closeAgent } = useRouter();
   const [hasOpened, setHasOpened] = useState(false);
   const [inputValue, setInputValue] = useState('');
   
@@ -59,8 +60,17 @@ export const AgentWidget: React.FC = () => {
   };
 
   useEffect(() => {
-    if (isOpen) scrollToBottom();
-  }, [chatState.messages, isOpen, chatState.isTyping]);
+    if (isAgentOpen) scrollToBottom();
+  }, [chatState.messages, isAgentOpen, chatState.isTyping]);
+
+  useEffect(() => {
+    const handleOpenAgent = () => {
+      openAgent();
+      setHasOpened(true);
+    };
+    window.addEventListener('open-agent', handleOpenAgent);
+    return () => window.removeEventListener('open-agent', handleOpenAgent);
+  }, [openAgent]);
 
   // Simulate agent typing delay
   const simulateTyping = async (msg: string) => {
@@ -90,6 +100,15 @@ export const AgentWidget: React.FC = () => {
   const handleSend = async () => {
     if (!inputValue.trim() || chatState.isTyping) return;
 
+    // Rate limiting: block if last submission was less than 2 seconds ago
+    const lastSubmit = localStorage.getItem('aifp_last_submit');
+    const now = Date.now();
+    if (lastSubmit && now - parseInt(lastSubmit) < 2000) {
+      console.warn('Rate limit exceeded. Please wait before sending another message.');
+      return;
+    }
+    localStorage.setItem('aifp_last_submit', now.toString());
+
     const userMsg: IntakeMessage = {
       id: Math.random().toString(),
       session_id: chatState.sessionId || 'temp',
@@ -110,9 +129,55 @@ export const AgentWidget: React.FC = () => {
     
     setInputValue('');
 
-    // State Machine logic
-    const { step, leadData } = chatState;
     const input = userMsg.message;
+
+    // Integração com n8n (Inteligência Artificial)
+    // Para ativar, basta adicionar VITE_N8N_WEBHOOK_URL no seu arquivo .env
+    const n8nWebhookUrl = import.meta.env.VITE_N8N_WEBHOOK_URL;
+    
+    if (n8nWebhookUrl) {
+      setChatState(prev => ({ ...prev, isTyping: true }));
+      try {
+        const response = await fetch(n8nWebhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: chatState.sessionId || 'temp-session',
+            message: input,
+            leadData: chatState.leadData
+          })
+        });
+        
+        const data = await response.json();
+        // O n8n deve retornar um JSON com a chave "output", "message" ou "response"
+        const agentReply = data.output || data.message || data.response || "Desculpe, não consegui processar sua mensagem.";
+        
+        const newMsg: IntakeMessage = {
+          id: Math.random().toString(),
+          session_id: chatState.sessionId || 'temp',
+          sender: 'agent',
+          message: agentReply,
+          created_at: new Date().toISOString()
+        };
+        
+        if (chatState.sessionId) {
+          try { await db.saveMessage(chatState.sessionId, 'agent', agentReply); } catch(e) {}
+        }
+        
+        setChatState(prev => ({
+          ...prev,
+          messages: [...prev.messages, newMsg],
+          isTyping: false
+        }));
+      } catch (error) {
+        console.error("Erro ao conectar com n8n:", error);
+        await simulateTyping("Desculpe, estou com problemas técnicos no momento. Tente novamente mais tarde.");
+      }
+      return; // Interrompe o fluxo fixo e usa apenas a IA
+    }
+
+    // State Machine logic (Fluxo fixo antigo caso não tenha n8n)
+    const { step, leadData } = chatState;
 
     switch (step) {
       case AgentStep.NAME:
@@ -142,6 +207,16 @@ export const AgentWidget: React.FC = () => {
       case AgentStep.PHONE:
         setChatState(prev => ({ ...prev, leadData: { ...prev.leadData, phone: input }, step: AgentStep.BOTTLENECK }));
         
+        // Rate limiting for lead creation: block if created less than 60 seconds ago
+        const lastLeadSubmit = localStorage.getItem('aifp_last_lead_submit');
+        const now = Date.now();
+        if (lastLeadSubmit && now - parseInt(lastLeadSubmit) < 60000) {
+          console.warn('Rate limit exceeded for lead creation.');
+          await simulateTyping(t('agent.askBottleneck')); // Continue flow without creating duplicate lead
+          break;
+        }
+        localStorage.setItem('aifp_last_lead_submit', now.toString());
+
         // In background, create lead and session since we have basic contact info now
         try {
           const lead = await db.createLead({ 
@@ -219,9 +294,9 @@ export const AgentWidget: React.FC = () => {
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
       {/* Widget Button */}
-      {!isOpen && (
+      {!isAgentOpen && (
         <button
-          onClick={() => { setIsOpen(true); setHasOpened(true); }}
+          onClick={() => { openAgent(); setHasOpened(true); }}
           className="bg-brand-600 hover:bg-brand-700 text-white rounded-full p-4 shadow-2xl transition-transform hover:scale-105 group relative"
         >
           <IconBot className="w-8 h-8" />
@@ -235,7 +310,7 @@ export const AgentWidget: React.FC = () => {
       )}
 
       {/* Chat Window */}
-      {isOpen && (
+      {isAgentOpen && (
         <div className="bg-white w-[350px] sm:w-[400px] h-[550px] max-h-[80vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-100">
           {/* Header */}
           <div className="bg-brand-600 p-4 text-white flex justify-between items-center shadow-md z-10">
@@ -248,7 +323,7 @@ export const AgentWidget: React.FC = () => {
                 <p className="text-xs text-brand-200">AI For Purpose</p>
               </div>
             </div>
-            <button onClick={() => setIsOpen(false)} className="text-white/80 hover:text-white transition-colors">
+            <button onClick={() => closeAgent()} className="text-white/80 hover:text-white transition-colors">
               <IconX className="w-5 h-5" />
             </button>
           </div>

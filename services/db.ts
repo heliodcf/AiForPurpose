@@ -207,23 +207,33 @@ class SupabaseDatabase {
     };
   }
 
-  async getLeadsWithDetails() {
+  async getLeadsWithDetails(page: number = 1, limit: number = 10) {
+    const offset = (page - 1) * limit;
+
     // Relacionamento PostgREST: Traz o Lead e a Sessão de Intake em uma única query
-    const { data, error } = await supabase
+    const { data, error, count } = await supabase
       .from('leads')
       .select(`
         *,
         session:intake_sessions(*)
-      `)
-      .order('created_at', { ascending: false });
+      `, { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
 
     if (error) throw new Error(error.message);
 
     // Formata o array (a join volta como array no Supabase, pegamos o índice 0)
-    return data.map((lead: any) => ({
+    const formattedData = data.map((lead: any) => ({
       ...lead,
       session: lead.session && lead.session.length > 0 ? lead.session[0] : null
     }));
+
+    return {
+      data: formattedData,
+      totalCount: count || 0,
+      page,
+      limit
+    };
   }
 }
 

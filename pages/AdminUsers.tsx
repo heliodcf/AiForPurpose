@@ -2,10 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { AdminLayout } from '../components/AdminLayout';
 import { db } from '../services/db';
 import { AdminUser } from '../types';
+import { Alert } from '../components/Alert';
 
 export const AdminUsers: React.FC = () => {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Form state
   const [isAdding, setIsAdding] = useState(false);
@@ -20,8 +22,10 @@ export const AdminUsers: React.FC = () => {
     try {
       const data = await db.getAdmins();
       setUsers(data);
+      setError(null);
     } catch (e) {
       console.error("Erro ao buscar usuários do Supabase", e);
+      setError("Não foi possível carregar a lista de usuários.");
     } finally {
       setLoading(false);
     }
@@ -68,6 +72,14 @@ export const AdminUsers: React.FC = () => {
           </button>
         )}
       </div>
+
+      {error && (
+        <Alert 
+          type="error" 
+          message={error} 
+          onClose={() => setError(null)} 
+        />
+      )}
 
       {isAdding && (
         <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 mb-8 max-w-2xl">

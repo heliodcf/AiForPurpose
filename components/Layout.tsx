@@ -55,7 +55,14 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 {t('nav.dashboard')}
               </a>
               <button 
-                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                onClick={() => {
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                  navigate('#/');
+                  setTimeout(() => {
+                    const event = new CustomEvent('open-agent');
+                    window.dispatchEvent(event);
+                  }, 100);
+                }}
                 className="bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-full font-medium text-sm transition-all shadow-sm hover:shadow"
               >
                 {t('nav.getQuote')}

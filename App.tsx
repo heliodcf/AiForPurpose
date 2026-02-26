@@ -8,6 +8,8 @@ import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { RouterProvider, useRouter } from './contexts/RouterContext';
 
+import { ErrorBoundary } from './components/ErrorBoundary';
+
 const AppContent: React.FC = () => {
   const { route } = useRouter();
   const { language } = useLanguage();
@@ -51,13 +53,15 @@ const AppContent: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <LanguageProvider>
-      <RouterProvider>
-        <AuthProvider>
-          <AppContent />
-        </AuthProvider>
-      </RouterProvider>
-    </LanguageProvider>
+    <ErrorBoundary>
+      <LanguageProvider>
+        <RouterProvider>
+          <AuthProvider>
+            <AppContent />
+          </AuthProvider>
+        </RouterProvider>
+      </LanguageProvider>
+    </ErrorBoundary>
   );
 };
 

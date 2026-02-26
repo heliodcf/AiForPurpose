@@ -1,24 +1,51 @@
 import React, { useEffect, useState } from 'react';
 import { AdminLayout } from '../components/AdminLayout';
 import { db } from '../services/db';
+import { Alert } from '../components/Alert';
+import { ChannelType } from '../types';
+
+// Configuração de estimativas por canal
+const CHANNEL_ESTIMATES: Record<string, { channel: string; icon: string; setup: string; mensal: string; keywords: string[] }> = {
+  [ChannelType.WHATSAPP]: { channel: 'WhatsApp', icon: '💬', setup: 'R$ 2.500 - R$ 4.000', mensal: 'R$ 497/mês', keywords: ['whats', 'wpp', 'whatsapp'] },
+  [ChannelType.INSTAGRAM]: { channel: 'Instagram', icon: '📸', setup: 'R$ 2.000 - R$ 3.500', mensal: 'R$ 397/mês', keywords: ['insta', 'ig', 'instagram'] },
+  [ChannelType.WEB]: { channel: 'Site (Widget)', icon: '🌐', setup: 'R$ 1.500 - R$ 3.000', mensal: 'R$ 297/mês', keywords: ['site', 'web', 'widget'] },
+  [ChannelType.VOICE]: { channel: 'Voz (URA IA)', icon: '🎙️', setup: 'R$ 5.000 - R$ 8.000', mensal: 'R$ 997/mês', keywords: ['voz', 'telefone', 'call', 'phone', 'ura'] },
+  [ChannelType.TELEGRAM]: { channel: 'Telegram', icon: '✈️', setup: 'R$ 1.500 - R$ 2.500', mensal: 'R$ 297/mês', keywords: ['telegram'] },
+};
 
 export const AdminLeads: React.FC = () => {
   const [leads, setLeads] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedLead, setSelectedLead] = useState<any | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const limit = 10;
 
-  useEffect(() => {
-    db.getLeadsWithDetails()
-      .then(data => {
-        setLeads(data);
+  const fetchLeads = (currentPage: number) => {
+    setLoading(true);
+    db.getLeadsWithDetails(currentPage, limit)
+      .then(response => {
+        setLeads(response.data);
+        setTotalCount(response.totalCount);
+        setError(null);
       })
       .catch(err => {
         console.error("Erro ao buscar leads: Verifique as credenciais do Supabase.", err);
+        setError("Não foi possível carregar a lista de leads. Verifique sua conexão ou configuração do banco de dados.");
       })
       .finally(() => {
         setLoading(false);
       });
-  }, []);
+  };
+
+  useEffect(() => {
+    fetchLeads(page);
+  }, [page]);
+
+  const totalPages = Math.ceil(totalCount / limit);
 
   // Lógica para deduzir o orçamento baseado na resposta de canal
   const getEstimates = (channelText?: string) => {
@@ -26,20 +53,11 @@ export const AdminLeads: React.FC = () => {
     const text = channelText.toLowerCase();
     const estimates = [];
 
-    if (text.includes('whats') || text.includes('wpp')) {
-      estimates.push({ channel: 'WhatsApp', icon: '💬', setup: 'R$ 2.500 - R$ 4.000', mensal: 'R$ 497/mês' });
-    }
-    if (text.includes('insta') || text.includes('ig')) {
-      estimates.push({ channel: 'Instagram', icon: '📸', setup: 'R$ 2.000 - R$ 3.500', mensal: 'R$ 397/mês' });
-    }
-    if (text.includes('site') || text.includes('web') || text.includes('widget')) {
-      estimates.push({ channel: 'Site (Widget)', icon: '🌐', setup: 'R$ 1.500 - R$ 3.000', mensal: 'R$ 297/mês' });
-    }
-    if (text.includes('voz') || text.includes('telefone') || text.includes('call') || text.includes('phone') || text.includes('ura')) {
-      estimates.push({ channel: 'Voz (URA IA)', icon: '🎙️', setup: 'R$ 5.000 - R$ 8.000', mensal: 'R$ 997/mês' });
-    }
-    if (text.includes('telegram')) {
-      estimates.push({ channel: 'Telegram', icon: '✈️', setup: 'R$ 1.500 - R$ 2.500', mensal: 'R$ 297/mês' });
+    // Busca por palavras-chave mapeadas na configuração
+    for (const [key, config] of Object.entries(CHANNEL_ESTIMATES)) {
+      if (config.keywords.some(keyword => text.includes(keyword))) {
+        estimates.push({ channel: config.channel, icon: config.icon, setup: config.setup, mensal: config.mensal });
+      }
     }
 
     // Fallback se não detectar nenhum específico mas houver texto
@@ -62,6 +80,14 @@ export const AdminLeads: React.FC = () => {
           <span>Exportar CSV</span>
         </button>
       </div>
+
+      {error && (
+        <Alert 
+          type="error" 
+          message={error} 
+          onClose={() => setError(null)} 
+        />
+      )}
 
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden relative min-h-[400px]">
         {loading ? (
@@ -142,6 +168,34 @@ export const AdminLeads: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Pagination Controls */}
+      {!loading && leads.length > 0 && (
+        <div className="flex items-center justify-between mt-6">
+          <div className="text-sm text-slate-500">
+            Mostrando <span className="font-medium">{(page - 1) * limit + 1}</span> a <span className="font-medium">{Math.min(page * limit, totalCount)}</span> de <span className="font-medium">{totalCount}</span> leads
+          </div>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Anterior
+            </button>
+            <div className="text-sm text-slate-600 font-medium px-2">
+              Página {page} de {totalPages || 1}
+            </div>
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages || totalPages === 0}
+              className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Próxima
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Detalhes do Lead */}
       {selectedLead && (

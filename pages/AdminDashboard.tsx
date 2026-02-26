@@ -1,18 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import { AdminLayout } from '../components/AdminLayout';
 import { db } from '../services/db';
+import { Alert } from '../components/Alert';
 
 export const AdminDashboard: React.FC = () => {
   const [stats, setStats] = useState({ totalLeads: 0, activeProjects: 0, completedIntakes: 0 });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     db.getDashboardStats()
       .then(data => {
         setStats(data);
+        setError(null);
       })
       .catch(err => {
-        console.error("Erro ao buscar estatísticas. Tem certeza que configurou o Supabase?", err);
+        console.error("Erro ao buscar estatísticas.", err);
+        setError("Não foi possível carregar as estatísticas. Verifique sua conexão ou configuração do banco de dados.");
       })
       .finally(() => {
         setLoading(false);
@@ -25,6 +29,14 @@ export const AdminDashboard: React.FC = () => {
         <h2 className="text-2xl font-bold text-slate-900">Visão Geral</h2>
         <p className="text-slate-500 mt-1">Acompanhe as métricas de conversão e projetos ativos.</p>
       </div>
+
+      {error && (
+        <Alert 
+          type="error" 
+          message={error} 
+          onClose={() => setError(null)} 
+        />
+      )}
 
       {loading ? (
         <div className="animate-pulse flex space-x-4">

@@ -3,9 +3,11 @@ import { Layout } from '../components/Layout';
 import { AgentWidget } from '../components/AgentWidget';
 import { IconCheckCircle } from '../components/Icons';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useRouter } from '../contexts/RouterContext';
 
 export const LandingPage: React.FC = () => {
   const { t, language } = useLanguage();
+  const { openAgent } = useRouter();
 
   return (
     <Layout>
@@ -29,10 +31,16 @@ export const LandingPage: React.FC = () => {
           </p>
           
           <div className="flex flex-col sm:flex-row justify-center items-center space-y-4 sm:space-y-0 sm:space-x-4">
-            <button className="w-full sm:w-auto px-8 py-4 bg-slate-900 text-white rounded-full font-semibold text-lg hover:bg-brand-600 transition-colors shadow-xl shadow-brand-500/20">
+            <button 
+              onClick={() => openAgent()}
+              className="w-full sm:w-auto px-8 py-4 bg-slate-900 text-white rounded-full font-semibold text-lg hover:bg-brand-600 transition-colors shadow-xl shadow-brand-500/20"
+            >
               {t('hero.btnQuote')}
             </button>
-            <button className="w-full sm:w-auto px-8 py-4 bg-white text-slate-700 border border-slate-200 rounded-full font-semibold text-lg hover:bg-slate-50 transition-colors">
+            <button 
+              onClick={() => openAgent()}
+              className="w-full sm:w-auto px-8 py-4 bg-white text-slate-700 border border-slate-200 rounded-full font-semibold text-lg hover:bg-slate-50 transition-colors"
+            >
               {t('hero.btnCases')}
             </button>
           </div>
@@ -178,7 +186,7 @@ export const LandingPage: React.FC = () => {
                 <li className="flex text-slate-600"><IconCheckCircle className="w-5 h-5 text-brand-500 mr-2 flex-shrink-0" /> {t('prc.st.f2')}</li>
                 <li className="flex text-slate-600"><IconCheckCircle className="w-5 h-5 text-brand-500 mr-2 flex-shrink-0" /> {t('prc.st.f3')}</li>
               </ul>
-              <button className="w-full py-3 px-4 bg-brand-50 text-brand-700 font-semibold rounded-xl hover:bg-brand-100 transition-colors">{t('prc.st.btn')}</button>
+              <button onClick={() => openAgent()} className="w-full py-3 px-4 bg-brand-50 text-brand-700 font-semibold rounded-xl hover:bg-brand-100 transition-colors">{t('prc.st.btn')}</button>
             </div>
 
             {/* Growth */}
@@ -192,7 +200,7 @@ export const LandingPage: React.FC = () => {
                 <li className="flex text-slate-300"><IconCheckCircle className="w-5 h-5 text-brand-400 mr-2 flex-shrink-0" /> {t('prc.gr.f2')}</li>
                 <li className="flex text-slate-300"><IconCheckCircle className="w-5 h-5 text-brand-400 mr-2 flex-shrink-0" /> {t('prc.gr.f3')}</li>
               </ul>
-              <button className="w-full py-3 px-4 bg-brand-500 text-white font-semibold rounded-xl hover:bg-brand-600 transition-colors">{t('prc.gr.btn')}</button>
+              <button onClick={() => openAgent()} className="w-full py-3 px-4 bg-brand-500 text-white font-semibold rounded-xl hover:bg-brand-600 transition-colors">{t('prc.gr.btn')}</button>
             </div>
 
             {/* Enterprise */}
@@ -205,7 +213,7 @@ export const LandingPage: React.FC = () => {
                 <li className="flex text-slate-600"><IconCheckCircle className="w-5 h-5 text-brand-500 mr-2 flex-shrink-0" /> {t('prc.ent.f2')}</li>
                 <li className="flex text-slate-600"><IconCheckCircle className="w-5 h-5 text-brand-500 mr-2 flex-shrink-0" /> {t('prc.ent.f3')}</li>
               </ul>
-              <button className="w-full py-3 px-4 bg-brand-50 text-brand-700 font-semibold rounded-xl hover:bg-brand-100 transition-colors">{t('prc.ent.btn')}</button>
+              <button onClick={() => openAgent()} className="w-full py-3 px-4 bg-brand-50 text-brand-700 font-semibold rounded-xl hover:bg-brand-100 transition-colors">{t('prc.ent.btn')}</button>
             </div>
           </div>
         </div>
