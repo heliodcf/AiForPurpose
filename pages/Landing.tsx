@@ -108,13 +108,23 @@ export const LandingPage: React.FC = () => {
                 ))}
               </ul>
             </div>
-            <div className="bg-slate-100 rounded-3xl p-8 relative overflow-hidden group">
-               <img src="https://picsum.photos/id/119/600/400" alt="Dashboard CRM" className="rounded-xl shadow-2xl transition-transform duration-500 group-hover:scale-105" />
+            <div className="bg-slate-100 rounded-3xl p-8 relative overflow-hidden group flex items-center justify-center">
+              <img 
+                src="https://xrslfoismvmvbaeendfg.supabase.co/storage/v1/object/public/Images/Ai%20Image1.png" 
+                alt="Messaging Agents" 
+                className="w-full h-auto max-w-md rounded-xl shadow-2xl transition-transform duration-500 group-hover:scale-105" 
+                referrerPolicy="no-referrer" 
+              />
             </div>
 
             {/* Service 2 */}
-            <div className="bg-slate-100 rounded-3xl p-8 relative overflow-hidden group order-2 md:order-1">
-               <img src="https://picsum.photos/id/160/600/400" alt="Análise de Voz" className="rounded-xl shadow-2xl transition-transform duration-500 group-hover:scale-105" />
+            <div className="bg-slate-100 rounded-3xl p-8 relative overflow-hidden group order-2 md:order-1 flex items-center justify-center">
+               <img 
+                 src="https://xrslfoismvmvbaeendfg.supabase.co/storage/v1/object/public/Images/AiImage2.png" 
+                 alt="Voice Agents" 
+                 className="w-full h-auto max-w-md rounded-xl shadow-2xl transition-transform duration-500 group-hover:scale-105" 
+                 referrerPolicy="no-referrer" 
+               />
             </div>
             <div className="flex flex-col justify-center order-1 md:order-2">
               <div className="w-12 h-12 bg-brand-100 text-brand-600 rounded-xl flex items-center justify-center mb-6">

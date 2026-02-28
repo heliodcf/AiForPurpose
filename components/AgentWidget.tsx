@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import Markdown from 'react-markdown';
 import { AgentStep, IntakeMessage } from '../types';
 import { db } from '../services/db';
 import { IconBot, IconX, IconSend } from './Icons';
@@ -374,12 +375,18 @@ export const AgentWidget: React.FC = () => {
           <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 no-scrollbar">
             {chatState.messages.map((msg, i) => (
               <div key={i} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[80%] rounded-2xl p-3 text-sm shadow-sm ${
+                <div className={`max-w-[85%] rounded-2xl p-3 text-sm shadow-sm ${
                   msg.sender === 'user' 
                     ? 'bg-brand-600 text-white rounded-tr-sm' 
                     : 'bg-white text-slate-800 border border-slate-100 rounded-tl-sm'
                 }`}>
-                  {msg.message}
+                  {msg.sender === 'user' ? (
+                    msg.message
+                  ) : (
+                    <div className="prose prose-sm max-w-none prose-p:leading-relaxed prose-p:my-1 prose-ul:my-1 prose-li:my-0 prose-strong:font-semibold">
+                      <Markdown>{msg.message}</Markdown>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
