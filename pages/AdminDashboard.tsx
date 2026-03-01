@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { AdminLayout } from '../components/AdminLayout';
 import { db } from '../services/db';
 import { Alert } from '../components/Alert';
+import { useRouter } from '../contexts/RouterContext';
 
 export const AdminDashboard: React.FC = () => {
   const [stats, setStats] = useState({ totalLeads: 0, activeProjects: 0, completedIntakes: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { navigate } = useRouter();
 
   useEffect(() => {
     db.getDashboardStats()
@@ -25,9 +27,21 @@ export const AdminDashboard: React.FC = () => {
 
   return (
     <AdminLayout>
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold text-slate-900">Visão Geral</h2>
-        <p className="text-slate-500 mt-1">Acompanhe as métricas de conversão e projetos ativos.</p>
+      <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900">Visão Geral</h2>
+          <p className="text-slate-500 mt-1">Acompanhe as métricas de conversão e projetos ativos.</p>
+        </div>
+        <div className="mt-4 sm:mt-0">
+          <a 
+            href="#/admin/kanban"
+            onClick={(e) => { e.preventDefault(); navigate('#/admin/kanban'); }}
+            className="inline-flex items-center space-x-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg font-medium transition-colors shadow-sm"
+          >
+            <span>Acessar CRM</span>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+          </a>
+        </div>
       </div>
 
       {error && (

@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useRouter } from '../contexts/RouterContext';
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { t, language, setLanguage } = useLanguage();
   const { navigate } = useRouter();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
     <div className="min-h-screen flex flex-col font-sans">
@@ -80,14 +81,100 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                   <option value="pt">PT</option>
                   <option value="es">ES</option>
                 </select>
-              <button className="text-slate-600 p-2">
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
+              <button 
+                className="text-slate-600 p-2"
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              >
+                {isMobileMenuOpen ? (
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                ) : (
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                )}
               </button>
             </div>
           </div>
         </div>
+
+        {/* Mobile Menu */}
+        {isMobileMenuOpen && (
+          <div className="md:hidden bg-white border-t border-slate-100 px-4 pt-2 pb-4 space-y-1 shadow-lg absolute w-full">
+            <a 
+              href="#solucoes" 
+              onClick={(e) => { 
+                e.preventDefault(); 
+                document.getElementById('solucoes')?.scrollIntoView({behavior: 'smooth'}); 
+                setIsMobileMenuOpen(false);
+              }} 
+              className="block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:text-brand-600 hover:bg-slate-50"
+            >
+              {t('nav.solutions')}
+            </a>
+            <a 
+              href="#como-funciona" 
+              onClick={(e) => { 
+                e.preventDefault(); 
+                document.getElementById('como-funciona')?.scrollIntoView({behavior: 'smooth'}); 
+                setIsMobileMenuOpen(false);
+              }} 
+              className="block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:text-brand-600 hover:bg-slate-50"
+            >
+              {t('nav.howItWorks')}
+            </a>
+            <a 
+              href="#casos" 
+              onClick={(e) => { 
+                e.preventDefault(); 
+                document.getElementById('casos')?.scrollIntoView({behavior: 'smooth'}); 
+                setIsMobileMenuOpen(false);
+              }} 
+              className="block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:text-brand-600 hover:bg-slate-50"
+            >
+              {t('nav.cases')}
+            </a>
+            <a 
+              href="#planos" 
+              onClick={(e) => { 
+                e.preventDefault(); 
+                document.getElementById('planos')?.scrollIntoView({behavior: 'smooth'}); 
+                setIsMobileMenuOpen(false);
+              }} 
+              className="block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:text-brand-600 hover:bg-slate-50"
+            >
+              {t('nav.pricing')}
+            </a>
+            <div className="pt-4 pb-2 border-t border-slate-100 mt-2">
+              <a 
+                href="#/admin" 
+                onClick={(e) => { 
+                  e.preventDefault(); 
+                  navigate('#/admin'); 
+                  setIsMobileMenuOpen(false);
+                }} 
+                className="block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:text-brand-600 hover:bg-slate-50"
+              >
+                {t('nav.dashboard')}
+              </a>
+              <button 
+                onClick={() => {
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                  navigate('#/');
+                  setTimeout(() => {
+                    const event = new CustomEvent('open-agent');
+                    window.dispatchEvent(event);
+                  }, 100);
+                  setIsMobileMenuOpen(false);
+                }}
+                className="mt-2 w-full text-center bg-brand-600 hover:bg-brand-700 text-white px-5 py-3 rounded-xl font-medium text-base transition-all shadow-sm"
+              >
+                {t('nav.getQuote')}
+              </button>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Main Content */}

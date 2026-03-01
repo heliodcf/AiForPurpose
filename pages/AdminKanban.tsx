@@ -184,7 +184,7 @@ export const AdminKanban: React.FC = () => {
   return (
     <AdminLayout>
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-slate-900">CRM Kanban</h2>
+        <h2 className="text-2xl font-bold text-slate-900">CRM</h2>
         <p className="text-slate-500 mt-1">Acompanhe o pipeline de vendas e negociações.</p>
       </div>
 

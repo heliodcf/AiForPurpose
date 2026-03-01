@@ -68,7 +68,7 @@ export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children 
             className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${currentHash === '#/admin/kanban' ? 'bg-brand-600/10 text-brand-400 font-medium' : 'hover:bg-slate-800 hover:text-white'}`}
           >
             <IconFolder className="w-5 h-5" />
-            <span>CRM Kanban</span>
+            <span>CRM</span>
           </a>
           <a 
             href="#/admin/users" 
