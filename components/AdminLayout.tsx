@@ -63,12 +63,12 @@ export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children 
             <span>Leads & Intakes</span>
           </a>
           <a 
-            href="#" 
-            onClick={(e) => e.preventDefault()} 
-            className="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-slate-800 hover:text-white transition-colors"
+            href="#/admin/kanban" 
+            onClick={(e) => { e.preventDefault(); handleNavClick('#/admin/kanban'); }} 
+            className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${currentHash === '#/admin/kanban' ? 'bg-brand-600/10 text-brand-400 font-medium' : 'hover:bg-slate-800 hover:text-white'}`}
           >
             <IconFolder className="w-5 h-5" />
-            <span>Projetos</span>
+            <span>CRM Kanban</span>
           </a>
           <a 
             href="#/admin/users" 

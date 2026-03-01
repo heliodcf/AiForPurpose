@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { LandingPage } from './pages/Landing';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { AdminLeads } from './pages/AdminLeads';
+import { AdminKanban } from './pages/AdminKanban';
 import { AdminLogin } from './pages/AdminLogin';
 import { AdminUsers } from './pages/AdminUsers';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
@@ -38,6 +39,10 @@ const AppContent: React.FC = () => {
 
     if (route === '#/admin/leads') {
       return <AdminLeads />;
+    }
+    
+    if (route === '#/admin/kanban') {
+      return <AdminKanban />;
     }
     
     if (route === '#/admin/users') {

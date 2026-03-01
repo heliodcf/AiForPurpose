@@ -179,16 +179,65 @@ class SupabaseDatabase {
     // Auto-cria o projeto após finalizar o briefing se tivermos o lead_id guardado no estado
     if (sessionData.lead_id) {
       const projectId = generateUUID();
-      await supabase.from('projects').insert([{
+      const { error: projectError } = await supabase.from('projects').insert([{
         id: projectId,
         lead_id: sessionData.lead_id,
-        status: 'Novo',
-        priority: 'medium',
+        status: ProjectStatus.ENTRADA_LEAD,
         notes: `Briefing recebido via Agente Inteligente. Gargalo: ${sessionData.bottleneck}. Prazo: ${sessionData.timeline}`
       }]);
+      
+      if (projectError) {
+        console.error("Erro ao criar projeto no CRM:", projectError);
+        // Não vamos lançar o erro para não quebrar o fluxo do usuário,
+        // mas o erro será logado no console.
+      }
     }
 
     return { id: sessionId, ...sessionData, completed_at } as IntakeSession;
+  }
+
+  // ==========================================
+  // KANBAN CRM DATA
+  // ==========================================
+
+  async getProjectsWithLeads(): Promise<Project[]> {
+    const { data, error } = await supabase
+      .from('projects')
+      .select(`
+        *,
+        lead:leads(*)
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error) throw new Error(error.message);
+    return data as Project[];
+  }
+
+  async updateProjectStatus(projectId: string, status: ProjectStatus): Promise<void> {
+    const { error } = await supabase
+      .from('projects')
+      .update({ status })
+      .eq('id', projectId);
+
+    if (error) throw new Error(error.message);
+  }
+
+  async updateProjectDetails(projectId: string, details: Partial<Project>): Promise<void> {
+    const { error } = await supabase
+      .from('projects')
+      .update(details)
+      .eq('id', projectId);
+
+    if (error) throw new Error(error.message);
+  }
+
+  async deleteProject(projectId: string): Promise<void> {
+    const { error } = await supabase
+      .from('projects')
+      .delete()
+      .eq('id', projectId);
+
+    if (error) throw new Error(error.message);
   }
 
   // ==========================================
@@ -199,7 +248,7 @@ class SupabaseDatabase {
     // Busca contagens exatas usando a API do Supabase
     const [leadsCount, projectsCount, intakesCount] = await Promise.all([
       supabase.from('leads').select('*', { count: 'exact', head: true }),
-      supabase.from('projects').select('*', { count: 'exact', head: true }).neq('status', 'Entregue'),
+      supabase.from('projects').select('*', { count: 'exact', head: true }).neq('status', ProjectStatus.FECHADO_GANHO).neq('status', ProjectStatus.FECHADO_PERDIDO),
       supabase.from('intake_sessions').select('*', { count: 'exact', head: true }).not('completed_at', 'is', 'null')
     ]);
 

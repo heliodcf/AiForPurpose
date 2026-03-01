@@ -1,9 +1,10 @@
 export enum ProjectStatus {
-  NEW = 'Novo',
-  DIAGNOSIS = 'Diagnóstico',
-  PROPOSAL = 'Proposta',
-  DEVELOPMENT = 'Em desenvolvimento',
-  DELIVERED = 'Entregue'
+  ENTRADA_LEAD = 'entrada_lead',
+  PREPARACAO_QUOTE = 'preparacao_quote',
+  QUOTE_ENVIADA = 'quote_enviada',
+  FOLLOW_UP = 'follow_up',
+  FECHADO_GANHO = 'fechado_ganho',
+  FECHADO_PERDIDO = 'fechado_perdido'
 }
 
 export enum ChannelType {
@@ -53,10 +54,13 @@ export interface Project {
   id: string;
   lead_id: string;
   status: ProjectStatus;
-  priority: 'low' | 'medium' | 'high';
+  estimated_value?: number;
+  probability?: number;
+  expected_close_date?: string;
   notes?: string;
   created_at: string;
   updated_at: string;
+  lead?: Lead; // Populated via join
 }
 
 export interface AdminUser {

@@ -79,8 +79,10 @@ CREATE TABLE public.intake_messages (
 CREATE TABLE public.projects (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   lead_id UUID REFERENCES public.leads(id) ON DELETE CASCADE NOT NULL,
-  status TEXT DEFAULT 'Novo' CHECK (status IN ('Novo', 'Diagnóstico', 'Proposta', 'Em desenvolvimento', 'Entregue')),
-  priority TEXT DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high')),
+  status TEXT DEFAULT 'entrada_lead' CHECK (status IN ('entrada_lead', 'preparacao_quote', 'quote_enviada', 'follow_up', 'fechado_ganho', 'fechado_perdido')),
+  estimated_value NUMERIC,
+  probability INTEGER CHECK (probability >= 0 AND probability <= 100),
+  expected_close_date DATE,
   owner_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   notes TEXT,
   created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
