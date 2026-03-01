@@ -30,6 +30,7 @@ const COLUMNS = [
   { id: ProjectStatus.FOLLOW_UP, title: 'Follow-up' },
   { id: ProjectStatus.FECHADO_GANHO, title: 'Fechado (Ganho)' },
   { id: ProjectStatus.FECHADO_PERDIDO, title: 'Fechado (Perdido)' },
+  { id: ProjectStatus.CARRINHO_PERDIDO, title: 'Carrinho Perdido' },
 ];
 
 const SortableCard = ({ project, onClick }: { project: Project, onClick: () => void }) => {

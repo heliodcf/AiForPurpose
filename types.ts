@@ -4,7 +4,8 @@ export enum ProjectStatus {
   QUOTE_ENVIADA = 'quote_enviada',
   FOLLOW_UP = 'follow_up',
   FECHADO_GANHO = 'fechado_ganho',
-  FECHADO_PERDIDO = 'fechado_perdido'
+  FECHADO_PERDIDO = 'fechado_perdido',
+  CARRINHO_PERDIDO = 'carrinho_perdido'
 }
 
 export enum ChannelType {
