@@ -86,6 +86,7 @@ export const AdminAbandonedCarts: React.FC = () => {
                   <th className="px-6 py-4 font-semibold">Email</th>
                   <th className="px-6 py-4 font-semibold">Telefone</th>
                   <th className="px-6 py-4 font-semibold">Data de Criação</th>
+                  <th className="px-6 py-4 font-semibold">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -111,6 +112,21 @@ export const AdminAbandonedCarts: React.FC = () => {
                         "dd 'de' MMMM, yyyy 'às' HH:mm",
                         { locale: ptBR },
                       )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <button
+                        onClick={async () => {
+                          try {
+                            await db.updateProjectStatus(cart.id, ProjectStatus.ENTRADA_LEAD);
+                            fetchCarts(page);
+                          } catch (e) {
+                            console.error("Erro ao recuperar lead:", e);
+                          }
+                        }}
+                        className="px-3 py-1.5 bg-brand-600 text-white text-xs font-medium rounded-lg hover:bg-brand-700 transition-colors"
+                      >
+                        Recuperar Lead
+                      </button>
                     </td>
                   </tr>
                 ))}

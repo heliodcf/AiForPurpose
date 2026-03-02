@@ -24,6 +24,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { format } from 'date-fns';
 
 const COLUMNS = [
+  { id: ProjectStatus.CARRINHO_PERDIDO, title: '🛒 Carrinho Abandonado' },
   { id: ProjectStatus.ENTRADA_LEAD, title: 'Entrada Lead' },
   { id: ProjectStatus.PREPARACAO_QUOTE, title: 'Preparando Proposta' },
   { id: ProjectStatus.QUOTE_ENVIADA, title: 'Proposta Enviada' },

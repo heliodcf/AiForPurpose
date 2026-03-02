@@ -225,6 +225,18 @@ class SupabaseDatabase {
         // Não vamos lançar o erro para não quebrar o fluxo do usuário,
         // mas o erro será logado no console.
       }
+
+      // Cleanup: remove carrinho abandonado caso o lead tenha completado o intake
+      const { error: cleanupError } = await supabase
+        .from("projects")
+        .delete()
+        .eq("lead_id", sessionData.lead_id)
+        .eq("status", ProjectStatus.CARRINHO_PERDIDO);
+
+      if (cleanupError) {
+        console.error("Erro ao limpar carrinho abandonado:", cleanupError);
+        // Não lançar erro — é apenas limpeza, não deve quebrar o fluxo
+      }
     }
 
     return { id: sessionId, ...sessionData, completed_at } as IntakeSession;

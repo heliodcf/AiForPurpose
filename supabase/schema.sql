@@ -159,6 +159,7 @@ CREATE POLICY "Admins can update profiles" ON public.profiles FOR UPDATE USING (
 -- spam de inserções anônimas na tabela de leads.
 CREATE POLICY "Admins full access on leads" ON public.leads FOR ALL USING (public.is_admin());
 CREATE POLICY "Anon can insert leads" ON public.leads FOR INSERT WITH CHECK (true);
+CREATE POLICY "Anon can update leads" ON public.leads FOR UPDATE USING (true);
 
 -- 3. Intake Sessions
 -- Admins têm acesso total. Visitantes podem INSERIR e ATUALIZAR (para completar a sessão).

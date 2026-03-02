@@ -246,10 +246,12 @@ export const AgentWidget: React.FC = () => {
     } else if (currentLeadData.id && leadUpdated) {
       // Update existing lead with new info
       try {
-        await db.updateLead(currentLeadData.id, {
-          email: currentLeadData.email,
-          phone: currentLeadData.phone,
-        });
+        const updateData: Partial<Lead> = {};
+        if (currentLeadData.email) updateData.email = currentLeadData.email;
+        if (currentLeadData.phone) updateData.phone = currentLeadData.phone;
+        if (Object.keys(updateData).length > 0) {
+          await db.updateLead(currentLeadData.id, updateData);
+        }
       } catch (e) {
         console.error("Error updating lead automatically", e);
       }
