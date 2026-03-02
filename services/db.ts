@@ -147,6 +147,15 @@ class SupabaseDatabase {
     return { created_at: new Date().toISOString(), ...payload } as Lead;
   }
 
+  async updateLead(leadId: string, leadData: Partial<Lead>): Promise<void> {
+    const { error } = await supabase
+      .from("leads")
+      .update(leadData)
+      .eq("id", leadId);
+
+    if (error) throw new Error(error.message);
+  }
+
   async createIntakeSession(leadId: string): Promise<IntakeSession> {
     const id = generateUUID();
     const payload = { id, lead_id: leadId };
@@ -279,7 +288,7 @@ class SupabaseDatabase {
 
   async getDashboardStats() {
     // Busca contagens exatas usando a API do Supabase
-    const [leadsCount, projectsCount, intakesCount] = await Promise.all([
+    const [leadsCount, projectsCount, intakesCount, abandonedCartsCount] = await Promise.all([
       supabase.from("leads").select("*", { count: "exact", head: true }),
       supabase
         .from("projects")
@@ -290,12 +299,17 @@ class SupabaseDatabase {
         .from("intake_sessions")
         .select("*", { count: "exact", head: true })
         .not("completed_at", "is", "null"),
+      supabase
+        .from("projects")
+        .select("*", { count: "exact", head: true })
+        .eq("status", ProjectStatus.CARRINHO_PERDIDO),
     ]);
 
     return {
       totalLeads: leadsCount.count || 0,
       activeProjects: projectsCount.count || 0,
       completedIntakes: intakesCount.count || 0,
+      abandonedCarts: abandonedCartsCount.count || 0,
     };
   }
 

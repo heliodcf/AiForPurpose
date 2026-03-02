@@ -32,21 +32,50 @@ export const AgentWidget: React.FC = () => {
   const [hasOpened, setHasOpened] = useState(false);
   const [inputValue, setInputValue] = useState("");
 
-  const [chatState, setChatState] = useState<ChatState>({
-    step: AgentStep.INIT,
-    messages: [],
-    leadData: {},
-    sessionId: sessionStorage.getItem("aifp_session_id") || undefined,
-    isTyping: false,
+  const [chatState, setChatState] = useState<ChatState>(() => {
+    let sessionId = sessionStorage.getItem("aifp_session_id") || undefined;
+    const lastActivity = sessionStorage.getItem("aifp_last_activity");
+    const now = Date.now();
+
+    // Se passou mais de 1 hora (3600000 ms) desde a última atividade, cria nova sessão
+    if (sessionId && lastActivity && now - parseInt(lastActivity) > 3600000) {
+      sessionStorage.removeItem("aifp_session_id");
+      sessionStorage.removeItem("aifp_last_activity");
+      sessionStorage.removeItem("watcherDisparado");
+      sessionStorage.removeItem("aifp_chat_state");
+      sessionId = undefined;
+    }
+
+    if (!sessionId) {
+      sessionId = crypto.randomUUID();
+      sessionStorage.setItem("aifp_session_id", sessionId);
+      sessionStorage.setItem("aifp_last_activity", now.toString());
+    }
+
+    const savedState = sessionStorage.getItem("aifp_chat_state");
+    if (savedState && sessionId) {
+      try {
+        const parsed = JSON.parse(savedState);
+        if (parsed.sessionId === sessionId) {
+          return { ...parsed, isTyping: false }; // Reset isTyping on reload
+        }
+      } catch (e) {
+        console.error("Failed to parse saved chat state", e);
+      }
+    }
+
+    return {
+      step: AgentStep.INIT,
+      messages: [],
+      leadData: {},
+      sessionId,
+      isTyping: false,
+    };
   });
 
   useEffect(() => {
-    if (!sessionStorage.getItem("aifp_session_id")) {
-      const newSessionId = crypto.randomUUID();
-      sessionStorage.setItem("aifp_session_id", newSessionId);
-      setChatState((prev) => ({ ...prev, sessionId: newSessionId }));
-    }
-  }, []);
+    sessionStorage.setItem("aifp_chat_state", JSON.stringify(chatState));
+  }, [chatState]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -137,6 +166,7 @@ export const AgentWidget: React.FC = () => {
       return;
     }
     localStorage.setItem("aifp_last_submit", now.toString());
+    sessionStorage.setItem("aifp_last_activity", now.toString());
 
     const userMsg: IntakeMessage = {
       id: Math.random().toString(),
@@ -163,12 +193,67 @@ export const AgentWidget: React.FC = () => {
     const input = userMsg.message;
 
     // Detect contact info for Abandoned Cart watcher
-    const hasEmail = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/.test(
-      input,
-    );
-    const hasPhone = /\b(\+?55\s?)?\(?\d{2}\)?\s?\d{4,5}[-.\s]?\d{4}\b/.test(
-      input,
-    );
+    const emailMatch = input.match(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/);
+    const phoneMatch = input.match(/\b(\+?55\s?)?\(?\d{2}\)?\s?\d{4,5}[-.\s]?\d{4}\b/);
+
+    const hasEmail = !!emailMatch;
+    const hasPhone = !!phoneMatch;
+
+    let currentLeadData = { ...chatState.leadData };
+    let leadUpdated = false;
+
+    if (emailMatch && !currentLeadData.email) {
+      currentLeadData.email = emailMatch[0];
+      leadUpdated = true;
+    }
+    if (phoneMatch && !currentLeadData.phone) {
+      currentLeadData.phone = phoneMatch[0];
+      leadUpdated = true;
+    }
+
+    if (leadUpdated) {
+      setChatState((prev) => ({ ...prev, leadData: currentLeadData }));
+    }
+
+    // Rate limiting for lead creation: block if created less than 60 seconds ago
+    const lastLeadSubmit = localStorage.getItem("aifp_last_lead_submit");
+    const nowLead = Date.now();
+    
+    if ((hasEmail || hasPhone) && !currentLeadData.id) {
+      if (!lastLeadSubmit || nowLead - parseInt(lastLeadSubmit) > 60000) {
+        localStorage.setItem("aifp_last_lead_submit", nowLead.toString());
+        try {
+          const lead = await db.createLead({
+            name: currentLeadData.name || "Visitante",
+            email: currentLeadData.email,
+            phone: currentLeadData.phone,
+          });
+          currentLeadData.id = lead.id;
+          setChatState((prev) => ({ ...prev, leadData: currentLeadData }));
+          
+          // Create intake session to link messages if not exists
+          if (chatState.sessionId) {
+            try {
+              // Check if session exists, if not create it.
+              // We can't easily check if it exists without a query, but we can just update it or insert it.
+              // Actually, n8n might be creating the session. Let's just create the lead and pass the ID.
+            } catch (e) {}
+          }
+        } catch (e) {
+          console.error("Error creating lead automatically", e);
+        }
+      }
+    } else if (currentLeadData.id && leadUpdated) {
+      // Update existing lead with new info
+      try {
+        await db.updateLead(currentLeadData.id, {
+          email: currentLeadData.email,
+          phone: currentLeadData.phone,
+        });
+      } catch (e) {
+        console.error("Error updating lead automatically", e);
+      }
+    }
 
     if ((hasEmail || hasPhone) && !sessionStorage.getItem("watcherDisparado")) {
       sessionStorage.setItem("watcherDisparado", "true");
@@ -182,16 +267,21 @@ export const AgentWidget: React.FC = () => {
     if (n8nWebhookUrl) {
       setChatState((prev) => ({ ...prev, isTyping: true }));
       try {
+        // Verifica se é a primeira mensagem da sessão para o n8n
+        const isNewSession = chatState.messages.filter(m => m.sender === 'user').length === 0;
+
         const response = await fetch(n8nWebhookUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             sessionId: chatState.sessionId || "temp-session",
+            isNewSession: isNewSession,
             message: input,
-            email: chatState.leadData.email || "",
-            telefone: chatState.leadData.phone || "",
-            nome: chatState.leadData.name || "",
-            leadData: chatState.leadData,
+            email: currentLeadData.email || "",
+            telefone: currentLeadData.phone || "",
+            nome: currentLeadData.name || "",
+            leadId: currentLeadData.id || "",
+            leadData: currentLeadData,
           }),
         });
 
