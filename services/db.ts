@@ -231,21 +231,24 @@ class SupabaseDatabase {
     }));
   }
 
-  async createAdmin(data: {
-    email: string;
-    name: string;
-    password: string;
-  }): Promise<any> {
-    // Atenção: Fazer signUp direto no front-end logo após criar o projeto pode auto-logar o admin.
-    // O ideal em produção é ter uma API route com a service_role key para criar usuários de admin.
+  async createAdmin(data: { email: string; name: string; password: string }): Promise<any> {
     const { data: authData, error } = await supabase.auth.signUp({
       email: data.email,
       password: data.password,
-      options: {
-        data: { name: data.name },
-      },
+      options: { data: { name: data.name } }
     });
     if (error) throw new Error(error.message);
+    if (!authData.user) throw new Error('Falha ao criar usuário.');
+
+    // Garante que o profile admin seja criado imediatamente
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .insert([{ id: authData.user.id, name: data.name, role: 'admin' }]);
+
+    if (profileError && profileError.code !== '23505') { // ignora duplicata
+      throw new Error(`Usuário criado mas profile falhou: ${profileError.message}`);
+    }
+
     return authData;
   }
 
@@ -487,29 +490,23 @@ class SupabaseDatabase {
   // ==========================================
 
   async getDashboardStats() {
-    // Busca contagens exatas usando a API do Supabase
     const [leadsCount, projectsCount, intakesCount, abandonedCartsCount] = await Promise.all([
-      supabase.from("leads").select("*", { count: "exact", head: true }),
-      supabase
-        .from("projects")
-        .select("*", { count: "exact", head: true })
-        .neq("status", ProjectStatus.FECHADO_GANHO)
-        .neq("status", ProjectStatus.FECHADO_PERDIDO),
-      supabase
-        .from("intake_sessions")
-        .select("*", { count: "exact", head: true })
-        .not("completed_at", "is", "null"),
-      supabase
-        .from("projects")
-        .select("*", { count: "exact", head: true })
-        .eq("status", ProjectStatus.CARRINHO_PERDIDO),
+      supabase.from('leads').select('*', { count: 'exact', head: true }),
+      supabase.from('projects').select('*', { count: 'exact', head: true }).neq('status', 'Entregue'),
+      supabase.from('intake_sessions').select('*', { count: 'exact', head: true }).not('completed_at', 'is', 'null'),
+      supabase.from('projects').select('*', { count: 'exact', head: true }).eq('status', 'carrinho_perdido')
     ]);
 
+    if (leadsCount.error) throw new Error(`Erro ao buscar leads: ${leadsCount.error.message}`);
+    if (projectsCount.error) throw new Error(`Erro ao buscar projetos: ${projectsCount.error.message}`);
+    if (intakesCount.error) throw new Error(`Erro ao buscar intakes: ${intakesCount.error.message}`);
+    if (abandonedCartsCount.error) throw new Error(`Erro ao buscar carrinhos abandonados: ${abandonedCartsCount.error.message}`);
+
     return {
-      totalLeads: leadsCount.count || 0,
-      activeProjects: projectsCount.count || 0,
-      completedIntakes: intakesCount.count || 0,
-      abandonedCarts: abandonedCartsCount.count || 0,
+      totalLeads: leadsCount.count ?? 0,
+      activeProjects: projectsCount.count ?? 0,
+      completedIntakes: intakesCount.count ?? 0,
+      abandonedCarts: abandonedCartsCount.count ?? 0
     };
   }
 
