@@ -355,6 +355,18 @@ export const AgentWidget: React.FC = () => {
           }
         }
 
+        // Após receber resposta do n8n:
+        try {
+          // Tenta fazer o parse do agentReply original caso ele seja um JSON estruturado
+          const structured = JSON.parse(agentReply);
+          if (structured.leadData) {
+            setChatState(prev => ({
+              ...prev,
+              leadData: { ...prev.leadData, ...structured.leadData }
+            }));
+          }
+        } catch { /* resposta é texto normal, ignorar */ }
+
         const newMsg: IntakeMessage = {
           id: Math.random().toString(),
           session_id: chatState.sessionId || "temp",

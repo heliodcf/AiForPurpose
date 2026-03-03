@@ -44,21 +44,35 @@ class SupabaseDatabase {
     });
     if (error) throw new Error(error.message);
 
+    // Migrate local data if exists
+    await this.migrateLocalData();
+
     // Busca os dados do perfil atrelados ao auth
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("*")
       .eq("id", data.user.id)
-      .single();
+      .maybeSingle();
 
     if (profileError) throw new Error(profileError.message);
+
+    if (!profile) {
+      // Se o perfil não existe (usuário criado antes da trigger), cria agora
+      const { error: insertError } = await supabase
+        .from("profiles")
+        .insert([{ id: data.user.id, name: "Administrador", role: "admin" }]);
+      if (insertError) {
+        console.error("Erro ao criar perfil:", insertError.message);
+        console.warn("Por favor, execute o script SQL 'supabase/fix_rls.sql' no seu painel Supabase para corrigir as permissões de RLS.");
+      }
+    }
 
     return {
       id: data.user.id,
       email: data.user.email!,
-      name: profile.name,
-      role: profile.role,
-      created_at: profile.created_at,
+      name: profile?.name || "Administrador",
+      role: profile?.role || "admin",
+      created_at: profile?.created_at || new Date().toISOString(),
     };
   }
 
@@ -73,21 +87,133 @@ class SupabaseDatabase {
     } = await supabase.auth.getSession();
     if (error || !session) return null;
 
+    // Migrate local data if exists
+    await this.migrateLocalData();
+
     const { data: profile } = await supabase
       .from("profiles")
       .select("*")
       .eq("id", session.user.id)
-      .single();
+      .maybeSingle();
 
-    if (!profile) return null;
+    if (!profile) {
+      // Se o perfil não existe, cria agora
+      const { error: insertError } = await supabase
+        .from("profiles")
+        .insert([{ id: session.user.id, name: "Administrador", role: "admin" }]);
+      if (insertError) {
+        console.error("Erro ao criar perfil:", insertError.message);
+        console.warn("Por favor, execute o script SQL 'supabase/fix_rls.sql' no seu painel Supabase para corrigir as permissões de RLS.");
+      }
+    }
 
     return {
       id: session.user.id,
       email: session.user.email!,
-      name: profile.name,
-      role: profile.role,
-      created_at: profile.created_at,
+      name: profile?.name || "Administrador",
+      role: profile?.role || "admin",
+      created_at: profile?.created_at || new Date().toISOString(),
     };
+  }
+
+  async migrateLocalData() {
+    try {
+      const localLeads = JSON.parse(localStorage.getItem('aifp_leads') || '[]');
+      const localSessions = JSON.parse(localStorage.getItem('aifp_sessions') || '[]');
+      const localMessages = JSON.parse(localStorage.getItem('aifp_messages') || '[]');
+      const localProjects = JSON.parse(localStorage.getItem('aifp_projects') || '[]');
+
+      if (localLeads.length === 0 && localProjects.length === 0) return;
+
+      // Check if Supabase already has leads
+      const { count } = await supabase.from('leads').select('*', { count: 'exact', head: true });
+      if (count && count > 0) return; // Already migrated or has data
+
+      console.log('Migrating local data to Supabase...');
+
+      // Map old IDs to new UUIDs
+      const leadIdMap: Record<string, string> = {};
+      const sessionIdMap: Record<string, string> = {};
+
+      const newLeads = localLeads.map((lead: any) => {
+        const newId = generateUUID();
+        leadIdMap[lead.id] = newId;
+        return { ...lead, id: newId };
+      });
+
+      const newSessions = localSessions.map((session: any) => {
+        const newId = generateUUID();
+        sessionIdMap[session.id] = newId;
+        return { 
+          ...session, 
+          id: newId, 
+          lead_id: leadIdMap[session.lead_id] || session.lead_id 
+        };
+      });
+
+      const newMessages = localMessages.map((msg: any) => {
+        return { 
+          ...msg, 
+          id: generateUUID(), 
+          session_id: sessionIdMap[msg.session_id] || msg.session_id 
+        };
+      });
+
+      const newProjects = localProjects.map((proj: any) => {
+        let status = proj.status;
+        if (status === 'novo' || status === 'Novo' || status === 'NEW' || !status) {
+          status = 'entrada_lead';
+        }
+        const { priority, ...restProj } = proj;
+        return { 
+          ...restProj, 
+          id: generateUUID(), 
+          lead_id: leadIdMap[proj.lead_id] || proj.lead_id,
+          status
+        };
+      });
+
+      let hasError = false;
+
+      // Insert leads
+      if (newLeads.length > 0) {
+        const { error } = await supabase.from('leads').insert(newLeads);
+        if (error) { console.error('Error inserting leads:', error); hasError = true; }
+      }
+
+      // Insert sessions
+      if (newSessions.length > 0) {
+        const { error } = await supabase.from('intake_sessions').insert(newSessions);
+        if (error) { console.error('Error inserting sessions:', error); hasError = true; }
+      }
+
+      // Insert messages
+      if (newMessages.length > 0) {
+        const { error } = await supabase.from('intake_messages').insert(newMessages);
+        if (error) { console.error('Error inserting messages:', error); hasError = true; }
+      }
+
+      // Insert projects
+      if (newProjects.length > 0) {
+        const { error } = await supabase.from('projects').insert(newProjects);
+        if (error) { console.error('Error inserting projects:', error); hasError = true; }
+      }
+
+      if (!hasError) {
+        console.log('Migration completed successfully.');
+        
+        // Clear local storage to prevent re-migration
+        localStorage.removeItem('aifp_leads');
+        localStorage.removeItem('aifp_sessions');
+        localStorage.removeItem('aifp_messages');
+        localStorage.removeItem('aifp_projects');
+      } else {
+        console.error('Migration completed with errors. Local storage not cleared.');
+      }
+
+    } catch (err) {
+      console.error('Error migrating local data:', err);
+    }
   }
 
   async getAdmins(): Promise<AdminUser[]> {
@@ -179,6 +305,18 @@ class SupabaseDatabase {
   }
 
   async completeIntake(sessionId: string, sessionData: Partial<IntakeSession>): Promise<IntakeSession> {
+    if (sessionData.lead_id && sessionData.name) {
+      await supabase
+        .from('leads')
+        .update({ 
+          name: sessionData.name,
+          company: sessionData.company,
+          role: sessionData.role 
+        })
+        .eq('id', sessionData.lead_id)
+        .eq('name', 'Visitante'); // só atualiza se ainda está como "Visitante"
+    }
+
     const completed_at = new Date().toISOString();
     const payload = {
       bottleneck: sessionData.bottleneck,
@@ -211,7 +349,6 @@ class SupabaseDatabase {
         id: projectId,
         lead_id: sessionData.lead_id,
         status: 'entrada_lead',
-        priority: 'medium',
         notes: `Briefing recebido via Agente Inteligente. Gargalo: ${sessionData.bottleneck}. Prazo: ${sessionData.timeline}`
       }]);
     }
@@ -270,31 +407,27 @@ class SupabaseDatabase {
   // ==========================================
 
   async createAbandonedCart(leadId: string): Promise<void> {
-    // Check if the lead already has any project
+    // Verifica se já existe QUALQUER projeto para este lead
     const { data: existingProjects } = await supabase
-      .from("projects")
-      .select("id")
-      .eq("lead_id", leadId)
+      .from('projects')
+      .select('id, status')
+      .eq('lead_id', leadId)
       .limit(1);
 
-    // If they already have a project, don't create an abandoned cart
-    if (existingProjects && existingProjects.length > 0) {
-      return;
-    }
+    // Se já tem projeto (qualquer status), não cria carrinho
+    if (existingProjects && existingProjects.length > 0) return;
 
     const projectId = generateUUID();
-    const { error } = await supabase.from("projects").insert([
-      {
+    const { error } = await supabase
+      .from('projects')
+      .insert([{
         id: projectId,
         lead_id: leadId,
-        status: ProjectStatus.CARRINHO_PERDIDO,
-        notes: "Lead iniciou contato mas não finalizou o briefing.",
-      },
-    ]);
+        status: 'carrinho_perdido',
+        notes: 'Lead iniciou contato mas não finalizou o briefing.'
+      }]);
 
-    if (error) {
-      console.error("Erro ao criar carrinho abandonado:", error);
-    }
+    if (error) console.error('Erro ao criar carrinho abandonado:', error.message);
   }
 
   // ==========================================

@@ -106,19 +106,19 @@ export const AdminDashboard: React.FC = () => {
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-8">
         <h3 className="font-semibold text-slate-800 mb-4">Conversão por Canal (Mock)</h3>
         <div className="h-64 flex items-end space-x-4">
-          <div className="w-full bg-slate-100 rounded-t-lg relative group">
+          <div className="w-full h-full bg-slate-100 rounded-t-lg relative group">
             <div className="absolute bottom-0 w-full bg-brand-400 rounded-t-lg transition-all" style={{ height: '60%' }}></div>
             <div className="absolute -bottom-6 w-full text-center text-xs text-slate-500">WhatsApp</div>
           </div>
-          <div className="w-full bg-slate-100 rounded-t-lg relative">
+          <div className="w-full h-full bg-slate-100 rounded-t-lg relative">
              <div className="absolute bottom-0 w-full bg-brand-500 rounded-t-lg transition-all" style={{ height: '85%' }}></div>
              <div className="absolute -bottom-6 w-full text-center text-xs text-slate-500">Voz</div>
           </div>
-          <div className="w-full bg-slate-100 rounded-t-lg relative">
+          <div className="w-full h-full bg-slate-100 rounded-t-lg relative">
              <div className="absolute bottom-0 w-full bg-brand-300 rounded-t-lg transition-all" style={{ height: '40%' }}></div>
              <div className="absolute -bottom-6 w-full text-center text-xs text-slate-500">Site</div>
           </div>
-          <div className="w-full bg-slate-100 rounded-t-lg relative">
+          <div className="w-full h-full bg-slate-100 rounded-t-lg relative">
              <div className="absolute bottom-0 w-full bg-brand-200 rounded-t-lg transition-all" style={{ height: '20%' }}></div>
              <div className="absolute -bottom-6 w-full text-center text-xs text-slate-500">Instagram</div>
           </div>

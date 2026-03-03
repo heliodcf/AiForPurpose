@@ -40,6 +40,9 @@ export interface IntakeSession {
   volume?: string;
   timeline?: string;
   summary?: string;
+  name?: string;
+  company?: string;
+  role?: string;
 }
 
 export interface IntakeMessage {
