@@ -231,6 +231,9 @@ export const AgentWidget: React.FC = () => {
           currentLeadData.id = lead.id;
           setChatState((prev) => ({ ...prev, leadData: currentLeadData }));
           
+          // Create abandoned cart project immediately
+          await db.createAbandonedCart(lead.id);
+          
           // Create intake session to link messages if not exists
           if (chatState.sessionId) {
             try {
@@ -252,6 +255,9 @@ export const AgentWidget: React.FC = () => {
         if (Object.keys(updateData).length > 0) {
           await db.updateLead(currentLeadData.id, updateData);
         }
+        
+        // Ensure they have an abandoned cart project if they don't have any project yet
+        await db.createAbandonedCart(currentLeadData.id);
       } catch (e) {
         console.error("Error updating lead automatically", e);
       }

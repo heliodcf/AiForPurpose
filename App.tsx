@@ -55,7 +55,7 @@ const AppContent: React.FC = () => {
       return <AdminUsers />;
     }
 
-    if (route === "#/admin/abandoned-carts") {
+    if (route === "#/admin/abandoned") {
       return <AdminAbandonedCarts />;
     }
 

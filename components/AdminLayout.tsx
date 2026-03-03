@@ -100,12 +100,12 @@ export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({
             <span>CRM</span>
           </a>
           <a
-            href="#/admin/abandoned-carts"
+            href="#/admin/abandoned"
             onClick={(e) => {
               e.preventDefault();
-              handleNavClick("#/admin/abandoned-carts");
+              handleNavClick("#/admin/abandoned");
             }}
-            className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${currentHash === "#/admin/abandoned-carts" ? "bg-brand-600/10 text-brand-400 font-medium" : "hover:bg-slate-800 hover:text-white"}`}
+            className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${currentHash === "#/admin/abandoned" ? "bg-brand-600/10 text-brand-400 font-medium" : "hover:bg-slate-800 hover:text-white"}`}
           >
             <svg
               className="w-5 h-5"
