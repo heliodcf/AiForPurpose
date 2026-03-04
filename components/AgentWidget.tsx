@@ -285,87 +285,30 @@ export const AgentWidget: React.FC = () => {
             sessionId: chatState.sessionId || "temp-session",
             isNewSession: isNewSession,
             message: input,
-            email: currentLeadData.email || "",
-            telefone: currentLeadData.phone || "",
-            nome: currentLeadData.name || "",
-            leadId: currentLeadData.id || "",
-            leadData: currentLeadData,
+            leadData: chatState.leadData,
+            nome: chatState.leadData.name || "",
+            email: chatState.leadData.email || "",
+            leadId: chatState.leadData.id || "",
           }),
         });
 
         const data = await response.json();
         console.log("Resposta do n8n:", data); // Log para debug
 
-        let agentReply = "Desculpe, não consegui processar sua mensagem.";
+        const agentReply = data.output || data.message || data.response || data.reply || "Desculpe, não consegui processar sua mensagem.";
 
-        // Tenta fazer parse caso o n8n tenha retornado uma string JSON (ex: "{\"reply\": \"...\"}")
-        let parsedData = data;
-        if (typeof data === "string") {
-          try {
-            parsedData = JSON.parse(data);
-          } catch (e) {
-            // Ignora, é apenas uma string normal
-          }
-        }
-
-        // O n8n pode retornar um array de objetos: [{ "reply": "..." }] ou [{ "json": { "reply": "..." } }]
-        if (Array.isArray(parsedData) && parsedData.length > 0) {
-          let firstItem = parsedData[0];
-          if (firstItem.json) firstItem = firstItem.json; // Desempacota se vier no formato raw do n8n
-
-          agentReply =
-            firstItem.reply ||
-            firstItem.output ||
-            firstItem.message ||
-            firstItem.response ||
-            firstItem.text ||
-            JSON.stringify(firstItem);
-        } else if (typeof parsedData === "object" && parsedData !== null) {
-          let obj = parsedData;
-          if (obj.json) obj = obj.json; // Desempacota se vier no formato raw do n8n
-
-          agentReply =
-            obj.reply ||
-            obj.output ||
-            obj.message ||
-            obj.response ||
-            obj.text ||
-            JSON.stringify(obj);
-        } else if (typeof parsedData === "string") {
-          agentReply = parsedData;
-        }
-
-        // Se o n8n retornou uma string que é um JSON (ex: o AI Agent retornou JSON puro dentro do campo reply)
-        if (
-          typeof agentReply === "string" &&
-          agentReply.trim().startsWith("{") &&
-          agentReply.trim().endsWith("}")
-        ) {
-          try {
-            const innerJson = JSON.parse(agentReply);
-            if (innerJson.reply) {
-              agentReply = innerJson.reply;
-            } else if (innerJson.output) {
-              agentReply = innerJson.output;
-            } else if (innerJson.message) {
-              agentReply = innerJson.message;
+        // Atualiza leadData se a IA retornar dados do lead
+        if (data.nome || data.email || data.leadId) {
+          setChatState(prev => ({
+            ...prev,
+            leadData: {
+              ...prev.leadData,
+              ...(data.nome && { name: data.nome }),
+              ...(data.email && { email: data.email }),
+              ...(data.leadId && { id: data.leadId })
             }
-          } catch (e) {
-            // Ignora se não for JSON válido
-          }
+          }));
         }
-
-        // Após receber resposta do n8n:
-        try {
-          // Tenta fazer o parse do agentReply original caso ele seja um JSON estruturado
-          const structured = JSON.parse(agentReply);
-          if (structured.leadData) {
-            setChatState(prev => ({
-              ...prev,
-              leadData: { ...prev.leadData, ...structured.leadData }
-            }));
-          }
-        } catch { /* resposta é texto normal, ignorar */ }
 
         const newMsg: IntakeMessage = {
           id: Math.random().toString(),

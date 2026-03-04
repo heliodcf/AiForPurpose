@@ -240,15 +240,14 @@ class SupabaseDatabase {
     if (error) throw new Error(error.message);
     if (!authData.user) throw new Error('Falha ao criar usuário.');
 
-    // Garante que o profile admin seja criado imediatamente
     const { error: profileError } = await supabase
       .from('profiles')
       .insert([{ id: authData.user.id, name: data.name, role: 'admin' }]);
 
-    if (profileError && profileError.code !== '23505') { // ignora duplicata
-      throw new Error(`Usuário criado mas profile falhou: ${profileError.message}`);
+    // Ignora erro de chave duplicada (23505), lança os demais
+    if (profileError && profileError.code !== '23505') {
+      throw new Error(`Usuário criado mas perfil falhou: ${profileError.message}`);
     }
-
     return authData;
   }
 
@@ -490,23 +489,20 @@ class SupabaseDatabase {
   // ==========================================
 
   async getDashboardStats() {
-    const [leadsCount, projectsCount, intakesCount, abandonedCartsCount] = await Promise.all([
+    const [leadsCount, projectsCount, intakesCount] = await Promise.all([
       supabase.from('leads').select('*', { count: 'exact', head: true }),
       supabase.from('projects').select('*', { count: 'exact', head: true }).neq('status', 'Entregue'),
-      supabase.from('intake_sessions').select('*', { count: 'exact', head: true }).not('completed_at', 'is', 'null'),
-      supabase.from('projects').select('*', { count: 'exact', head: true }).eq('status', 'carrinho_perdido')
+      supabase.from('intake_sessions').select('*', { count: 'exact', head: true }).not('completed_at', 'is', 'null')
     ]);
 
     if (leadsCount.error) throw new Error(`Erro ao buscar leads: ${leadsCount.error.message}`);
     if (projectsCount.error) throw new Error(`Erro ao buscar projetos: ${projectsCount.error.message}`);
     if (intakesCount.error) throw new Error(`Erro ao buscar intakes: ${intakesCount.error.message}`);
-    if (abandonedCartsCount.error) throw new Error(`Erro ao buscar carrinhos abandonados: ${abandonedCartsCount.error.message}`);
 
     return {
       totalLeads: leadsCount.count ?? 0,
       activeProjects: projectsCount.count ?? 0,
-      completedIntakes: intakesCount.count ?? 0,
-      abandonedCarts: abandonedCartsCount.count ?? 0
+      completedIntakes: intakesCount.count ?? 0
     };
   }
 
