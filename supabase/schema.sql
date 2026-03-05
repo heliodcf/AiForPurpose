@@ -79,7 +79,7 @@ CREATE TABLE public.intake_messages (
 CREATE TABLE public.projects (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   lead_id UUID REFERENCES public.leads(id) ON DELETE CASCADE NOT NULL,
-  status TEXT DEFAULT 'Novo' CHECK (status IN ('Novo', 'Diagnóstico', 'Proposta', 'Em desenvolvimento', 'Entregue')),
+  status TEXT DEFAULT 'Novo' CHECK (status IN ('Novo', 'Diagnóstico', 'Proposta', 'Em desenvolvimento', 'Entregue', 'entrada_lead', 'carrinho_perdido')),
   priority TEXT DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high')),
   owner_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   notes TEXT,
@@ -171,5 +171,7 @@ CREATE POLICY "Anon can insert intake_messages" ON public.intake_messages FOR IN
 
 -- 5. Projects
 -- Admins têm acesso total. Visitantes podem INSERIR (pois a lógica atual cria um projeto no momento em que o intake termina).
+-- Visitantes também podem DELETAR projetos com status 'carrinho_perdido' (necessário para limpeza ao completar o intake).
 CREATE POLICY "Admins full access on projects" ON public.projects FOR ALL USING (public.is_admin());
 CREATE POLICY "Anon can insert projects" ON public.projects FOR INSERT WITH CHECK (true);
+CREATE POLICY "Anon can delete carrinho_perdido" ON public.projects FOR DELETE USING (status = 'carrinho_perdido');

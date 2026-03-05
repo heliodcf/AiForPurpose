@@ -31,11 +31,30 @@ export const AgentWidget: React.FC = () => {
   const [hasOpened, setHasOpened] = useState(false);
   const [inputValue, setInputValue] = useState('');
   
-  const [chatState, setChatState] = useState<ChatState>({
-    step: AgentStep.INIT,
-    messages: [],
-    leadData: {},
-    isTyping: false
+  const [chatState, setChatState] = useState<ChatState>(() => {
+    // Recupera ou cria sessionId persistente via sessionStorage
+    let sessionId = sessionStorage.getItem('aifp_session_id') || undefined;
+    const lastActivity = sessionStorage.getItem('aifp_last_activity');
+    const now = Date.now();
+    // Expira sessão após 1 hora de inatividade
+    if (sessionId && lastActivity && now - parseInt(lastActivity) > 3600000) {
+      sessionStorage.removeItem('aifp_session_id');
+      sessionStorage.removeItem('aifp_last_activity');
+      sessionStorage.removeItem('watcherDisparado');
+      sessionId = undefined;
+    }
+    if (!sessionId) {
+      sessionId = crypto.randomUUID();
+      sessionStorage.setItem('aifp_session_id', sessionId);
+      sessionStorage.setItem('aifp_last_activity', now.toString());
+    }
+    return {
+      step: AgentStep.INIT,
+      messages: [],
+      leadData: {},
+      sessionId,
+      isTyping: false
+    };
   });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -137,21 +156,60 @@ export const AgentWidget: React.FC = () => {
     
     if (n8nWebhookUrl) {
       setChatState(prev => ({ ...prev, isTyping: true }));
+      sessionStorage.setItem('aifp_last_activity', Date.now().toString());
+
+      // Verifica se é a primeira mensagem do usuário nesta sessão
+      const isNewSession = chatState.messages.filter(m => m.sender === 'user').length === 0;
+
+      // Controla se o watcher deve ser disparado (apenas na 1ª detecção de contato)
+      const triggerWatcher = !sessionStorage.getItem('watcherDisparado');
+      if (triggerWatcher) sessionStorage.setItem('watcherDisparado', 'true');
+
       try {
         const response = await fetch(n8nWebhookUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             sessionId: chatState.sessionId || 'temp-session',
+            isNewSession,
+            triggerWatcher,
             message: input,
-            leadData: chatState.leadData
+            leadData: chatState.leadData,
+            nome: chatState.leadData.name || '',
+            email: chatState.leadData.email || '',
+            leadId: chatState.leadData.id || '',
           })
         });
-        
+
         const data = await response.json();
-        // O n8n deve retornar um JSON com a chave "output", "message" ou "response"
-        const agentReply = data.output || data.message || data.response || "Desculpe, não consegui processar sua mensagem.";
-        
+        // N8N retorna { reply: "...", isComplete: bool } via nó Edit Fields
+        const agentReply = data.reply || data.output || data.message || data.response || 'Desculpe, não consegui processar sua mensagem.';
+
+        // Atualiza leadData se a IA retornar dados do lead
+        if (data.leadId || data.nome || data.email) {
+          setChatState(prev => ({
+            ...prev,
+            leadData: {
+              ...prev.leadData,
+              ...(data.leadId && { id: data.leadId }),
+              ...(data.nome   && { name: data.nome }),
+              ...(data.email  && { email: data.email }),
+            }
+          }));
+        }
+
+        // Quando intake completo: remove carrinho abandonado e cria projeto real
+        if (data.isComplete === true) {
+          const leadId = data.leadId || chatState.leadData.id;
+          if (leadId && chatState.sessionId) {
+            try {
+              await db.completeIntake(chatState.sessionId, { lead_id: leadId });
+            } catch (e) {
+              console.error('Erro ao finalizar intake:', e);
+            }
+          }
+        }
+
         const newMsg: IntakeMessage = {
           id: Math.random().toString(),
           session_id: chatState.sessionId || 'temp',
@@ -159,19 +217,20 @@ export const AgentWidget: React.FC = () => {
           message: agentReply,
           created_at: new Date().toISOString()
         };
-        
+
         if (chatState.sessionId) {
           try { await db.saveMessage(chatState.sessionId, 'agent', agentReply); } catch(e) {}
         }
-        
+
         setChatState(prev => ({
           ...prev,
+          step: data.isComplete === true ? AgentStep.DONE : prev.step,
           messages: [...prev.messages, newMsg],
           isTyping: false
         }));
       } catch (error) {
-        console.error("Erro ao conectar com n8n:", error);
-        await simulateTyping("Desculpe, estou com problemas técnicos no momento. Tente novamente mais tarde.");
+        console.error('Erro ao conectar com n8n:', error);
+        await simulateTyping('Desculpe, estou com problemas técnicos no momento. Tente novamente mais tarde.');
       }
       return; // Interrompe o fluxo fixo e usa apenas a IA
     }
@@ -201,45 +260,78 @@ export const AgentWidget: React.FC = () => {
           return;
         }
         setChatState(prev => ({ ...prev, leadData: { ...prev.leadData, email: input }, step: AgentStep.PHONE }));
+
+        // Rate limiting for lead creation: block if created less than 60 seconds ago
+        const lastLeadSubmitEmail = localStorage.getItem('aifp_last_lead_submit');
+        const nowEmail = Date.now();
+        if (!lastLeadSubmitEmail || nowEmail - parseInt(lastLeadSubmitEmail) >= 60000) {
+          localStorage.setItem('aifp_last_lead_submit', nowEmail.toString());
+          // Create lead now so the name is persisted before potential abandonment
+          try {
+            const lead = await db.createLead({
+              name: leadData.name,
+              company: leadData.company,
+              role: leadData.role,
+              email: input,
+            });
+            const session = await db.createIntakeSession(lead.id);
+
+            setChatState(prev => ({
+              ...prev,
+              sessionId: session.id,
+              leadData: { ...prev.leadData, id: lead.id, email: input }
+            }));
+
+            // Save the backlog of messages to the new session
+            for (const m of chatState.messages) {
+              await db.saveMessage(session.id, m.sender, m.message);
+            }
+            await db.saveMessage(session.id, 'user', input);
+          } catch (e) { console.error('Error creating lead at email step', e); }
+        }
+
         await simulateTyping(t('agent.askPhone'));
         break;
 
       case AgentStep.PHONE:
         setChatState(prev => ({ ...prev, leadData: { ...prev.leadData, phone: input }, step: AgentStep.BOTTLENECK }));
-        
-        // Rate limiting for lead creation: block if created less than 60 seconds ago
-        const lastLeadSubmit = localStorage.getItem('aifp_last_lead_submit');
-        const now = Date.now();
-        if (lastLeadSubmit && now - parseInt(lastLeadSubmit) < 60000) {
-          console.warn('Rate limit exceeded for lead creation.');
-          await simulateTyping(t('agent.askBottleneck')); // Continue flow without creating duplicate lead
-          break;
-        }
-        localStorage.setItem('aifp_last_lead_submit', now.toString());
 
-        // In background, create lead and session since we have basic contact info now
         try {
-          const lead = await db.createLead({ 
-            name: leadData.name, 
-            company: leadData.company, 
-            role: leadData.role,
-            email: leadData.email,
-            phone: input
-          });
-          const session = await db.createIntakeSession(lead.id);
-          
-          setChatState(prev => ({ 
-            ...prev, 
-            sessionId: session.id,
-            leadData: { ...prev.leadData, id: lead.id } 
-          }));
-          
-          // Save the backlog of messages to the new session
-          for (const m of chatState.messages) {
-             await db.saveMessage(session.id, m.sender, m.message);
+          if (leadData.id) {
+            // Lead already created at EMAIL step — just add the phone number
+            await db.updateLead(leadData.id, { phone: input });
+          } else {
+            // Fallback: create lead if email step creation failed
+            const lastLeadSubmit = localStorage.getItem('aifp_last_lead_submit');
+            const now = Date.now();
+            if (lastLeadSubmit && now - parseInt(lastLeadSubmit) < 60000) {
+              console.warn('Rate limit exceeded for lead creation.');
+              await simulateTyping(t('agent.askBottleneck'));
+              break;
+            }
+            localStorage.setItem('aifp_last_lead_submit', now.toString());
+
+            const lead = await db.createLead({
+              name: leadData.name,
+              company: leadData.company,
+              role: leadData.role,
+              email: leadData.email,
+              phone: input
+            });
+            const session = await db.createIntakeSession(lead.id);
+
+            setChatState(prev => ({
+              ...prev,
+              sessionId: session.id,
+              leadData: { ...prev.leadData, id: lead.id }
+            }));
+
+            for (const m of chatState.messages) {
+              await db.saveMessage(session.id, m.sender, m.message);
+            }
+            await db.saveMessage(session.id, 'user', input);
           }
-          await db.saveMessage(session.id, 'user', input); // save current input
-        } catch (e) { console.error('Error creating lead', e) }
+        } catch (e) { console.error('Error at phone step', e); }
 
         await simulateTyping(t('agent.askBottleneck'));
         break;

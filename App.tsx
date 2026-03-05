@@ -4,6 +4,7 @@ import { AdminDashboard } from './pages/AdminDashboard';
 import { AdminLeads } from './pages/AdminLeads';
 import { AdminLogin } from './pages/AdminLogin';
 import { AdminUsers } from './pages/AdminUsers';
+import { AdminAbandonedCarts } from './pages/AdminAbandonedCarts';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { RouterProvider, useRouter } from './contexts/RouterContext';
@@ -39,7 +40,11 @@ const AppContent: React.FC = () => {
     if (route === '#/admin/leads') {
       return <AdminLeads />;
     }
-    
+
+    if (route === '#/admin/abandoned') {
+      return <AdminAbandonedCarts />;
+    }
+
     if (route === '#/admin/users') {
       return <AdminUsers />;
     }

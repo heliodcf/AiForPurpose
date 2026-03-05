@@ -178,17 +178,70 @@ class SupabaseDatabase {
 
     // Auto-cria o projeto após finalizar o briefing se tivermos o lead_id guardado no estado
     if (sessionData.lead_id) {
+      // Remove qualquer projeto de carrinho abandonado antes de criar o projeto real
+      await supabase
+        .from('projects')
+        .delete()
+        .eq('lead_id', sessionData.lead_id)
+        .eq('status', 'carrinho_perdido');
+
       const projectId = generateUUID();
       await supabase.from('projects').insert([{
         id: projectId,
         lead_id: sessionData.lead_id,
-        status: 'Novo',
+        status: 'entrada_lead',
         priority: 'medium',
         notes: `Briefing recebido via Agente Inteligente. Gargalo: ${sessionData.bottleneck}. Prazo: ${sessionData.timeline}`
       }]);
     }
 
     return { id: sessionId, ...sessionData, completed_at } as IntakeSession;
+  }
+
+  async updateLead(leadId: string, updates: Partial<Lead>): Promise<void> {
+    // Apenas envia os campos que possuem valor definido
+    const payload: Record<string, any> = {};
+    const fields: (keyof Lead)[] = ['name', 'company', 'role', 'email', 'phone', 'location', 'status'];
+    for (const field of fields) {
+      if (updates[field] !== undefined) {
+        payload[field] = updates[field];
+      }
+    }
+    if (Object.keys(payload).length === 0) return;
+
+    const { error } = await supabase
+      .from('leads')
+      .update(payload)
+      .eq('id', leadId);
+
+    if (error) throw new Error(error.message);
+  }
+
+  async getAbandonedCarts() {
+    const { data, error } = await supabase
+      .from('projects')
+      .select(`
+        *,
+        lead:leads(*)
+      `)
+      .eq('status', 'carrinho_perdido')
+      .order('created_at', { ascending: false });
+
+    if (error) throw new Error(error.message);
+
+    return (data || []).map((project: any) => ({
+      ...project,
+      lead: Array.isArray(project.lead) ? project.lead[0] : project.lead
+    }));
+  }
+
+  async recoverLead(projectId: string): Promise<void> {
+    const { error } = await supabase
+      .from('projects')
+      .update({ status: 'entrada_lead' })
+      .eq('id', projectId);
+
+    if (error) throw new Error(error.message);
   }
 
   // ==========================================
