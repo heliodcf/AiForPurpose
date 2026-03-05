@@ -33,7 +33,6 @@ export const AdminAbandonedCarts: React.FC = () => {
     try {
       await db.recoverLead(projectId);
       setSuccess(`Lead "${leadName}" recuperado com sucesso e movido para o pipeline.`);
-      // Remove da lista local
       setCarts(prev => prev.filter(c => c.id !== projectId));
     } catch (err: any) {
       setError(`Erro ao recuperar lead: ${err.message}`);
@@ -112,15 +111,9 @@ export const AdminAbandonedCarts: React.FC = () => {
                         </span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-slate-600">
-                      {cart.lead?.email || '-'}
-                    </td>
-                    <td className="px-6 py-4 text-slate-600">
-                      {cart.lead?.phone || '-'}
-                    </td>
-                    <td className="px-6 py-4 text-slate-500 text-xs">
-                      {formatDate(cart.created_at)}
-                    </td>
+                    <td className="px-6 py-4 text-slate-600">{cart.lead?.email || '-'}</td>
+                    <td className="px-6 py-4 text-slate-600">{cart.lead?.phone || '-'}</td>
+                    <td className="px-6 py-4 text-slate-500 text-xs">{formatDate(cart.created_at)}</td>
                     <td className="px-6 py-4 text-right">
                       <button
                         onClick={() => handleRecover(cart.id, cart.lead?.name || 'Lead')}

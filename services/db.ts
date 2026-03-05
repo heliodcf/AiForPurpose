@@ -1,5 +1,12 @@
-import { createClient } from '@supabase/supabase-js';
-import { Lead, IntakeSession, IntakeMessage, Project, ProjectStatus, AdminUser } from '../types';
+import { createClient } from "@supabase/supabase-js";
+import {
+  Lead,
+  IntakeSession,
+  IntakeMessage,
+  Project,
+  ProjectStatus,
+  AdminUser,
+} from "../types";
 
 // ============================================================================
 // CONFIGURAÇÃO SUPABASE
@@ -8,48 +15,64 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  throw new Error('Supabase credentials are missing. Check your .env file.');
+  throw new Error("Supabase credentials are missing. Check your .env file.");
 }
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Helper para gerar UUIDv4 localmente
 function generateUUID() {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
     return crypto.randomUUID();
   }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
 }
 
 class SupabaseDatabase {
-  
   // ==========================================
   // AUTH & USERS
   // ==========================================
 
   async login(email: string, password: string): Promise<AdminUser> {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
     if (error) throw new Error(error.message);
-    
+
+    // Migrate local data if exists
+    await this.migrateLocalData();
+
     // Busca os dados do perfil atrelados ao auth
     const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', data.user.id)
-      .single();
-      
+      .from("profiles")
+      .select("*")
+      .eq("id", data.user.id)
+      .maybeSingle();
+
     if (profileError) throw new Error(profileError.message);
+
+    if (!profile) {
+      // Se o perfil não existe (usuário criado antes da trigger), cria agora
+      const { error: insertError } = await supabase
+        .from("profiles")
+        .insert([{ id: data.user.id, name: "Administrador", role: "admin" }]);
+      if (insertError) {
+        console.error("Erro ao criar perfil:", insertError.message);
+        console.warn("Por favor, execute o script SQL 'supabase/fix_rls.sql' no seu painel Supabase para corrigir as permissões de RLS.");
+      }
+    }
 
     return {
       id: data.user.id,
       email: data.user.email!,
-      name: profile.name,
-      role: profile.role,
-      created_at: profile.created_at
+      name: profile?.name || "Administrador",
+      role: profile?.role || "admin",
+      created_at: profile?.created_at || new Date().toISOString(),
     };
   }
 
@@ -58,52 +81,173 @@ class SupabaseDatabase {
   }
 
   async getCurrentUser(): Promise<AdminUser | null> {
-    const { data: { session }, error } = await supabase.auth.getSession();
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
     if (error || !session) return null;
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', session.user.id)
-      .single();
+    // Migrate local data if exists
+    await this.migrateLocalData();
 
-    if (!profile) return null;
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", session.user.id)
+      .maybeSingle();
+
+    if (!profile) {
+      // Se o perfil não existe, cria agora
+      const { error: insertError } = await supabase
+        .from("profiles")
+        .insert([{ id: session.user.id, name: "Administrador", role: "admin" }]);
+      if (insertError) {
+        console.error("Erro ao criar perfil:", insertError.message);
+        console.warn("Por favor, execute o script SQL 'supabase/fix_rls.sql' no seu painel Supabase para corrigir as permissões de RLS.");
+      }
+    }
 
     return {
       id: session.user.id,
       email: session.user.email!,
-      name: profile.name,
-      role: profile.role,
-      created_at: profile.created_at
+      name: profile?.name || "Administrador",
+      role: profile?.role || "admin",
+      created_at: profile?.created_at || new Date().toISOString(),
     };
   }
 
+  async migrateLocalData() {
+    try {
+      const localLeads = JSON.parse(localStorage.getItem('aifp_leads') || '[]');
+      const localSessions = JSON.parse(localStorage.getItem('aifp_sessions') || '[]');
+      const localMessages = JSON.parse(localStorage.getItem('aifp_messages') || '[]');
+      const localProjects = JSON.parse(localStorage.getItem('aifp_projects') || '[]');
+
+      if (localLeads.length === 0 && localProjects.length === 0) return;
+
+      // Check if Supabase already has leads
+      const { count } = await supabase.from('leads').select('*', { count: 'exact', head: true });
+      if (count && count > 0) return; // Already migrated or has data
+
+      console.log('Migrating local data to Supabase...');
+
+      // Map old IDs to new UUIDs
+      const leadIdMap: Record<string, string> = {};
+      const sessionIdMap: Record<string, string> = {};
+
+      const newLeads = localLeads.map((lead: any) => {
+        const newId = generateUUID();
+        leadIdMap[lead.id] = newId;
+        return { ...lead, id: newId };
+      });
+
+      const newSessions = localSessions.map((session: any) => {
+        const newId = generateUUID();
+        sessionIdMap[session.id] = newId;
+        return { 
+          ...session, 
+          id: newId, 
+          lead_id: leadIdMap[session.lead_id] || session.lead_id 
+        };
+      });
+
+      const newMessages = localMessages.map((msg: any) => {
+        return { 
+          ...msg, 
+          id: generateUUID(), 
+          session_id: sessionIdMap[msg.session_id] || msg.session_id 
+        };
+      });
+
+      const newProjects = localProjects.map((proj: any) => {
+        let status = proj.status;
+        if (status === 'novo' || status === 'Novo' || status === 'NEW' || !status) {
+          status = 'entrada_lead';
+        }
+        const { priority, ...restProj } = proj;
+        return { 
+          ...restProj, 
+          id: generateUUID(), 
+          lead_id: leadIdMap[proj.lead_id] || proj.lead_id,
+          status
+        };
+      });
+
+      let hasError = false;
+
+      // Insert leads
+      if (newLeads.length > 0) {
+        const { error } = await supabase.from('leads').insert(newLeads);
+        if (error) { console.error('Error inserting leads:', error); hasError = true; }
+      }
+
+      // Insert sessions
+      if (newSessions.length > 0) {
+        const { error } = await supabase.from('intake_sessions').insert(newSessions);
+        if (error) { console.error('Error inserting sessions:', error); hasError = true; }
+      }
+
+      // Insert messages
+      if (newMessages.length > 0) {
+        const { error } = await supabase.from('intake_messages').insert(newMessages);
+        if (error) { console.error('Error inserting messages:', error); hasError = true; }
+      }
+
+      // Insert projects
+      if (newProjects.length > 0) {
+        const { error } = await supabase.from('projects').insert(newProjects);
+        if (error) { console.error('Error inserting projects:', error); hasError = true; }
+      }
+
+      if (!hasError) {
+        console.log('Migration completed successfully.');
+        
+        // Clear local storage to prevent re-migration
+        localStorage.removeItem('aifp_leads');
+        localStorage.removeItem('aifp_sessions');
+        localStorage.removeItem('aifp_messages');
+        localStorage.removeItem('aifp_projects');
+      } else {
+        console.error('Migration completed with errors. Local storage not cleared.');
+      }
+
+    } catch (err) {
+      console.error('Error migrating local data:', err);
+    }
+  }
+
   async getAdmins(): Promise<AdminUser[]> {
-    const { data, error } = await supabase.from('profiles').select('*');
+    const { data, error } = await supabase.from("profiles").select("*");
     if (error) throw new Error(error.message);
-    
+
     // Supabase Auth esconde emails de outros usuários por padrão no frontend.
     // Retornamos um mock pro email aqui no painel se não usarmos edge functions (service_role)
-    return data.map(p => ({
+    return data.map((p) => ({
       id: p.id,
-      email: 'protegido@aiforpurpose.com',
+      email: "protegido@aiforpurpose.com",
       name: p.name,
       role: p.role,
-      created_at: p.created_at
+      created_at: p.created_at,
     }));
   }
 
   async createAdmin(data: { email: string; name: string; password: string }): Promise<any> {
-    // Atenção: Fazer signUp direto no front-end logo após criar o projeto pode auto-logar o admin.
-    // O ideal em produção é ter uma API route com a service_role key para criar usuários de admin.
     const { data: authData, error } = await supabase.auth.signUp({
       email: data.email,
       password: data.password,
-      options: {
-        data: { name: data.name }
-      }
+      options: { data: { name: data.name } }
     });
     if (error) throw new Error(error.message);
+    if (!authData.user) throw new Error('Falha ao criar usuário.');
+
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .insert([{ id: authData.user.id, name: data.name, role: 'admin' }]);
+
+    // Ignora erro de chave duplicada (23505), lança os demais
+    if (profileError && profileError.code !== '23505') {
+      throw new Error(`Usuário criado mas perfil falhou: ${profileError.message}`);
+    }
     return authData;
   }
 
@@ -115,49 +259,66 @@ class SupabaseDatabase {
     const id = generateUUID();
     const payload = {
       id,
-      name: leadData.name || 'Desconhecido',
+      name: leadData.name || "Desconhecido",
       company: leadData.company || null,
       role: leadData.role || null,
       email: leadData.email || null,
       phone: leadData.phone || null,
-      source: 'Agent Widget',
-      status: 'Novo'
+      source: "Agent Widget",
+      status: "Novo",
     };
 
     // Removemos o .select().single() para evitar erro de RLS de leitura (anônimo não pode ler, só inserir)
-    const { error } = await supabase
-      .from('leads')
-      .insert([payload]);
+    const { error } = await supabase.from("leads").insert([payload]);
 
     if (error) throw new Error(error.message);
     return { created_at: new Date().toISOString(), ...payload } as Lead;
   }
 
+
   async createIntakeSession(leadId: string): Promise<IntakeSession> {
     const id = generateUUID();
     const payload = { id, lead_id: leadId };
 
-    const { error } = await supabase
-      .from('intake_sessions')
-      .insert([payload]);
+    const { error } = await supabase.from("intake_sessions").insert([payload]);
 
     if (error) throw new Error(error.message);
-    return { started_at: new Date().toISOString(), ...payload } as IntakeSession;
+    return {
+      started_at: new Date().toISOString(),
+      ...payload,
+    } as IntakeSession;
   }
 
-  async saveMessage(sessionId: string, sender: 'user' | 'agent', message: string): Promise<IntakeMessage> {
+  async saveMessage(
+    sessionId: string,
+    sender: "user" | "agent",
+    message: string,
+  ): Promise<IntakeMessage> {
     const id = generateUUID();
     const payload = { id, session_id: sessionId, sender, message };
 
-    const { error } = await supabase
-      .from('intake_messages')
-      .insert([payload]);
+    const { error } = await supabase.from("intake_messages").insert([payload]);
 
     if (error) throw new Error(error.message);
-    return { created_at: new Date().toISOString(), ...payload } as IntakeMessage;
+    return {
+      created_at: new Date().toISOString(),
+      ...payload,
+    } as IntakeMessage;
   }
 
   async completeIntake(sessionId: string, sessionData: Partial<IntakeSession>): Promise<IntakeSession> {
+    if (sessionData.lead_id && sessionData.name) {
+      await supabase
+        .from('leads')
+        .update({ 
+          name: sessionData.name,
+          company: sessionData.company,
+          role: sessionData.role 
+        })
+        .eq('id', sessionData.lead_id)
+        .eq('name', 'Visitante'); // só atualiza se ainda está como "Visitante"
+    }
+
     const completed_at = new Date().toISOString();
     const payload = {
       bottleneck: sessionData.bottleneck,
@@ -190,7 +351,6 @@ class SupabaseDatabase {
         id: projectId,
         lead_id: sessionData.lead_id,
         status: 'entrada_lead',
-        priority: 'medium',
         notes: `Briefing recebido via Agente Inteligente. Gargalo: ${sessionData.bottleneck}. Prazo: ${sessionData.timeline}`
       }]);
     }
@@ -245,21 +405,104 @@ class SupabaseDatabase {
   }
 
   // ==========================================
+  // ABANDONED CARTS
+  // ==========================================
+
+  async createAbandonedCart(leadId: string): Promise<void> {
+    // Verifica se já existe QUALQUER projeto para este lead
+    const { data: existingProjects } = await supabase
+      .from('projects')
+      .select('id, status')
+      .eq('lead_id', leadId)
+      .limit(1);
+
+    // Se já tem projeto (qualquer status), não cria carrinho
+    if (existingProjects && existingProjects.length > 0) return;
+
+    const projectId = generateUUID();
+    const { error } = await supabase
+      .from('projects')
+      .insert([{
+        id: projectId,
+        lead_id: leadId,
+        status: 'carrinho_perdido',
+        notes: 'Lead iniciou contato mas não finalizou o briefing.'
+      }]);
+
+    if (error) console.error('Erro ao criar carrinho abandonado:', error.message);
+  }
+
+  // ==========================================
+  // KANBAN CRM DATA
+  // ==========================================
+
+  async getProjectsWithLeads(): Promise<Project[]> {
+    const { data, error } = await supabase
+      .from("projects")
+      .select(
+        `
+        *,
+        lead:leads(*)
+      `,
+      )
+      .order("created_at", { ascending: false });
+
+    if (error) throw new Error(error.message);
+    return data as Project[];
+  }
+
+  async updateProjectStatus(
+    projectId: string,
+    status: ProjectStatus,
+  ): Promise<void> {
+    const { error } = await supabase
+      .from("projects")
+      .update({ status })
+      .eq("id", projectId);
+
+    if (error) throw new Error(error.message);
+  }
+
+  async updateProjectDetails(
+    projectId: string,
+    details: Partial<Project>,
+  ): Promise<void> {
+    const { error } = await supabase
+      .from("projects")
+      .update(details)
+      .eq("id", projectId);
+
+    if (error) throw new Error(error.message);
+  }
+
+  async deleteProject(projectId: string): Promise<void> {
+    const { error } = await supabase
+      .from("projects")
+      .delete()
+      .eq("id", projectId);
+
+    if (error) throw new Error(error.message);
+  }
+
+  // ==========================================
   // DASHBOARD DATA
   // ==========================================
 
   async getDashboardStats() {
-    // Busca contagens exatas usando a API do Supabase
     const [leadsCount, projectsCount, intakesCount] = await Promise.all([
       supabase.from('leads').select('*', { count: 'exact', head: true }),
       supabase.from('projects').select('*', { count: 'exact', head: true }).neq('status', 'Entregue'),
       supabase.from('intake_sessions').select('*', { count: 'exact', head: true }).not('completed_at', 'is', 'null')
     ]);
 
+    if (leadsCount.error) throw new Error(`Erro ao buscar leads: ${leadsCount.error.message}`);
+    if (projectsCount.error) throw new Error(`Erro ao buscar projetos: ${projectsCount.error.message}`);
+    if (intakesCount.error) throw new Error(`Erro ao buscar intakes: ${intakesCount.error.message}`);
+
     return {
-      totalLeads: leadsCount.count || 0,
-      activeProjects: projectsCount.count || 0,
-      completedIntakes: intakesCount.count || 0
+      totalLeads: leadsCount.count ?? 0,
+      activeProjects: projectsCount.count ?? 0,
+      completedIntakes: intakesCount.count ?? 0
     };
   }
 
@@ -268,12 +511,15 @@ class SupabaseDatabase {
 
     // Relacionamento PostgREST: Traz o Lead e a Sessão de Intake em uma única query
     const { data, error, count } = await supabase
-      .from('leads')
-      .select(`
+      .from("leads")
+      .select(
+        `
         *,
         session:intake_sessions(*)
-      `, { count: 'exact' })
-      .order('created_at', { ascending: false })
+      `,
+        { count: "exact" },
+      )
+      .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1);
 
     if (error) throw new Error(error.message);
@@ -281,16 +527,17 @@ class SupabaseDatabase {
     // Formata o array (a join volta como array no Supabase, pegamos o índice 0)
     const formattedData = data.map((lead: any) => ({
       ...lead,
-      session: lead.session && lead.session.length > 0 ? lead.session[0] : null
+      session: lead.session && lead.session.length > 0 ? lead.session[0] : null,
     }));
 
     return {
       data: formattedData,
       totalCount: count || 0,
       page,
-      limit
+      limit,
     };
   }
+
 }
 
 export const db = new SupabaseDatabase();
