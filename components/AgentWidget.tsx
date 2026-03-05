@@ -218,8 +218,9 @@ export const AgentWidget: React.FC = () => {
     // Rate limiting for lead creation: block if created less than 60 seconds ago
     const lastLeadSubmit = localStorage.getItem("aifp_last_lead_submit");
     const nowLead = Date.now();
-    
+
     if (!import.meta.env.VITE_N8N_WEBHOOK_URL) {
+      // Non-N8N mode: frontend creates lead + abandoned cart directly
       if ((hasEmail || hasPhone) && !currentLeadData.id) {
         if (!lastLeadSubmit || nowLead - parseInt(lastLeadSubmit) > 60000) {
           localStorage.setItem("aifp_last_lead_submit", nowLead.toString());
@@ -231,18 +232,9 @@ export const AgentWidget: React.FC = () => {
             });
             currentLeadData.id = lead.id;
             setChatState((prev) => ({ ...prev, leadData: currentLeadData }));
-            
+
             // Create abandoned cart project immediately
             await db.createAbandonedCart(lead.id);
-            
-            // Create intake session to link messages if not exists
-            if (chatState.sessionId) {
-              try {
-                // Check if session exists, if not create it.
-                // We can't easily check if it exists without a query, but we can just update it or insert it.
-                // Actually, n8n might be creating the session. Let's just create the lead and pass the ID.
-              } catch (e) {}
-            }
           } catch (e) {
             console.error("Error creating lead automatically", e);
           }
@@ -256,18 +248,18 @@ export const AgentWidget: React.FC = () => {
           if (Object.keys(updateData).length > 0) {
             await db.updateLead(currentLeadData.id, updateData);
           }
-          
+
           // Ensure they have an abandoned cart project if they don't have any project yet
           await db.createAbandonedCart(currentLeadData.id);
         } catch (e) {
           console.error("Error updating lead automatically", e);
         }
       }
-    }
 
-    if ((hasEmail || hasPhone) && !sessionStorage.getItem("watcherDisparado")) {
-      sessionStorage.setItem("watcherDisparado", "true");
-      // The watcher will be triggered by n8n automatically via Aria
+      // Non-N8N mode: mark watcher as "fired" locally (no real watcher, just prevent duplicates)
+      if ((hasEmail || hasPhone) && !sessionStorage.getItem("watcherDisparado")) {
+        sessionStorage.setItem("watcherDisparado", "true");
+      }
     }
 
     // Integração com n8n (Inteligência Artificial)
@@ -281,9 +273,13 @@ export const AgentWidget: React.FC = () => {
         // Verifica se é a primeira mensagem da sessão para o n8n
         const isNewSession = chatState.messages.filter(m => m.sender === 'user').length === 0;
 
-        // FIX: Controla watcher — dispara apenas na 1ª detecção de contato por sessão
-        const triggerWatcher = !sessionStorage.getItem('watcherDisparado');
-        if (triggerWatcher) sessionStorage.setItem('watcherDisparado', 'true');
+        // Controla watcher — dispara apenas na 1ª detecção de contato por sessão
+        // IMPORTANTE: calcular ANTES de setar o flag
+        const triggerWatcher = (hasEmail || hasPhone) && !sessionStorage.getItem('watcherDisparado');
+        if (triggerWatcher) {
+          sessionStorage.setItem('watcherDisparado', 'true');
+          console.log('[Aria] Primeiro contato detectado — sinalizando watcher para N8N');
+        }
 
         const response = await fetch(n8nWebhookUrl, {
           method: "POST",
@@ -301,33 +297,39 @@ export const AgentWidget: React.FC = () => {
         });
 
         const data = await response.json();
-        console.log("Resposta do n8n:", data); // Log para debug
+        console.log('[Aria] Resposta do N8N:', JSON.stringify(data)); // Log completo para debug
 
-        // FIX: lê data.reply primeiro (campo retornado pelo nó Edit Fields do N8N)
+        // Lê data.reply primeiro (campo retornado pelo nó Edit Fields do N8N)
         const agentReply = data.reply || data.output || data.message || data.response || "Desculpe, não consegui processar sua mensagem.";
 
         // Atualiza leadData se a IA retornar dados do lead
         if (data.nome || data.email || data.leadId) {
+          currentLeadData = {
+            ...currentLeadData,
+            ...(data.nome && { name: data.nome }),
+            ...(data.email && { email: data.email }),
+            ...(data.leadId && { id: data.leadId }),
+          };
           setChatState(prev => ({
             ...prev,
-            leadData: {
-              ...prev.leadData,
-              ...(data.nome && { name: data.nome }),
-              ...(data.email && { email: data.email }),
-              ...(data.leadId && { id: data.leadId })
-            }
+            leadData: currentLeadData,
           }));
         }
 
-        // FIX: Quando intake completo — remove carrinho abandonado e cria projeto real
+        // Quando intake completo — remove carrinho abandonado e cria projeto real
+        // isComplete === true é retornado pelo N8N apenas quando Aria coleta TODOS os dados
         if (data.isComplete === true) {
           const leadId = data.leadId || currentLeadData.id;
+          console.log('[Aria] Intake completo! leadId:', leadId, '| sessionId:', chatState.sessionId);
           if (leadId && chatState.sessionId) {
             try {
               await db.completeIntake(chatState.sessionId, { lead_id: leadId });
+              console.log('[Aria] completeIntake executado com sucesso');
             } catch (e) {
-              console.error('Erro ao finalizar intake:', e);
+              console.error('[Aria] Erro ao finalizar intake:', e);
             }
+          } else {
+            console.warn('[Aria] isComplete=true mas sem leadId ou sessionId — completeIntake ignorado', { leadId, sessionId: chatState.sessionId });
           }
         }
 
