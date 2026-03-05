@@ -219,47 +219,49 @@ export const AgentWidget: React.FC = () => {
     const lastLeadSubmit = localStorage.getItem("aifp_last_lead_submit");
     const nowLead = Date.now();
     
-    if ((hasEmail || hasPhone) && !currentLeadData.id) {
-      if (!lastLeadSubmit || nowLead - parseInt(lastLeadSubmit) > 60000) {
-        localStorage.setItem("aifp_last_lead_submit", nowLead.toString());
-        try {
-          const lead = await db.createLead({
-            name: currentLeadData.name || "Visitante",
-            email: currentLeadData.email,
-            phone: currentLeadData.phone,
-          });
-          currentLeadData.id = lead.id;
-          setChatState((prev) => ({ ...prev, leadData: currentLeadData }));
-          
-          // Create abandoned cart project immediately
-          await db.createAbandonedCart(lead.id);
-          
-          // Create intake session to link messages if not exists
-          if (chatState.sessionId) {
-            try {
-              // Check if session exists, if not create it.
-              // We can't easily check if it exists without a query, but we can just update it or insert it.
-              // Actually, n8n might be creating the session. Let's just create the lead and pass the ID.
-            } catch (e) {}
+    if (!import.meta.env.VITE_N8N_WEBHOOK_URL) {
+      if ((hasEmail || hasPhone) && !currentLeadData.id) {
+        if (!lastLeadSubmit || nowLead - parseInt(lastLeadSubmit) > 60000) {
+          localStorage.setItem("aifp_last_lead_submit", nowLead.toString());
+          try {
+            const lead = await db.createLead({
+              name: currentLeadData.name || "Visitante",
+              email: currentLeadData.email,
+              phone: currentLeadData.phone,
+            });
+            currentLeadData.id = lead.id;
+            setChatState((prev) => ({ ...prev, leadData: currentLeadData }));
+            
+            // Create abandoned cart project immediately
+            await db.createAbandonedCart(lead.id);
+            
+            // Create intake session to link messages if not exists
+            if (chatState.sessionId) {
+              try {
+                // Check if session exists, if not create it.
+                // We can't easily check if it exists without a query, but we can just update it or insert it.
+                // Actually, n8n might be creating the session. Let's just create the lead and pass the ID.
+              } catch (e) {}
+            }
+          } catch (e) {
+            console.error("Error creating lead automatically", e);
           }
+        }
+      } else if (currentLeadData.id && leadUpdated) {
+        // Update existing lead with new info
+        try {
+          const updateData: Partial<Lead> = {};
+          if (currentLeadData.email) updateData.email = currentLeadData.email;
+          if (currentLeadData.phone) updateData.phone = currentLeadData.phone;
+          if (Object.keys(updateData).length > 0) {
+            await db.updateLead(currentLeadData.id, updateData);
+          }
+          
+          // Ensure they have an abandoned cart project if they don't have any project yet
+          await db.createAbandonedCart(currentLeadData.id);
         } catch (e) {
-          console.error("Error creating lead automatically", e);
+          console.error("Error updating lead automatically", e);
         }
-      }
-    } else if (currentLeadData.id && leadUpdated) {
-      // Update existing lead with new info
-      try {
-        const updateData: Partial<Lead> = {};
-        if (currentLeadData.email) updateData.email = currentLeadData.email;
-        if (currentLeadData.phone) updateData.phone = currentLeadData.phone;
-        if (Object.keys(updateData).length > 0) {
-          await db.updateLead(currentLeadData.id, updateData);
-        }
-        
-        // Ensure they have an abandoned cart project if they don't have any project yet
-        await db.createAbandonedCart(currentLeadData.id);
-      } catch (e) {
-        console.error("Error updating lead automatically", e);
       }
     }
 
@@ -285,10 +287,10 @@ export const AgentWidget: React.FC = () => {
             sessionId: chatState.sessionId || "temp-session",
             isNewSession: isNewSession,
             message: input,
-            leadData: chatState.leadData,
-            nome: chatState.leadData.name || "",
-            email: chatState.leadData.email || "",
-            leadId: chatState.leadData.id || "",
+            leadData: currentLeadData,
+            nome: currentLeadData.name || "",
+            email: currentLeadData.email || "",
+            leadId: currentLeadData.id || "",
           }),
         });
 
