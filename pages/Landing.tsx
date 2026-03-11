@@ -97,7 +97,7 @@ export const LandingPage: React.FC = () => {
                 <div className="absolute inset-0 rounded-full border border-zinc-800/50 animate-glow-pulse" />
                 <video
                   ref={videoRef}
-                  src="/hero-aria.mp4"
+                  src={`${import.meta.env.BASE_URL}hero-aria.mp4`}
                   muted
                   playsInline
                   preload="auto"
