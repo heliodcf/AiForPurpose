@@ -11,9 +11,23 @@ interface LanguageContextType {
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
+const STORAGE_KEY = 'aifp_language';
+
+const getSavedLanguage = (): Language => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved === 'en' || saved === 'pt' || saved === 'es') return saved;
+  } catch {}
+  return 'pt'; // padrão: português
+};
+
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // English first
-  const [language, setLanguage] = useState<Language>('en');
+  const [language, setLanguageState] = useState<Language>(getSavedLanguage);
+
+  const setLanguage = (lang: Language) => {
+    try { localStorage.setItem(STORAGE_KEY, lang); } catch {}
+    setLanguageState(lang);
+  };
 
   const t = (key: string, params?: Record<string, string | number>) => {
     let text = translations[language]?.[key] || translations['en']?.[key] || key;

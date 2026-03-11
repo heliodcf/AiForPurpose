@@ -1,10 +1,96 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import Markdown from "react-markdown";
 import { AgentStep, IntakeMessage } from "../types";
 import { db } from "../services/db";
 import { IconBot, IconX, IconSend } from "./Icons";
 import { useLanguage } from "../contexts/LanguageContext";
 import { useRouter } from "../contexts/RouterContext";
+
+// Timezone → country/region detection (zero API, zero permission)
+interface GeoContext {
+  country: string;
+  countryCode: string;
+  region: "latam" | "north_america" | "europe" | "asia" | "other";
+  timezone: string;
+}
+
+const TIMEZONE_COUNTRY_MAP: Record<string, { country: string; code: string; region: GeoContext["region"] }> = {
+  // Latin America
+  "America/Sao_Paulo": { country: "BR", code: "+55", region: "latam" },
+  "America/Fortaleza": { country: "BR", code: "+55", region: "latam" },
+  "America/Recife": { country: "BR", code: "+55", region: "latam" },
+  "America/Bahia": { country: "BR", code: "+55", region: "latam" },
+  "America/Belem": { country: "BR", code: "+55", region: "latam" },
+  "America/Manaus": { country: "BR", code: "+55", region: "latam" },
+  "America/Cuiaba": { country: "BR", code: "+55", region: "latam" },
+  "America/Campo_Grande": { country: "BR", code: "+55", region: "latam" },
+  "America/Porto_Velho": { country: "BR", code: "+55", region: "latam" },
+  "America/Rio_Branco": { country: "BR", code: "+55", region: "latam" },
+  "America/Araguaina": { country: "BR", code: "+55", region: "latam" },
+  "America/Noronha": { country: "BR", code: "+55", region: "latam" },
+  "America/Buenos_Aires": { country: "AR", code: "+54", region: "latam" },
+  "America/Argentina/Buenos_Aires": { country: "AR", code: "+54", region: "latam" },
+  "America/Mexico_City": { country: "MX", code: "+52", region: "latam" },
+  "America/Bogota": { country: "CO", code: "+57", region: "latam" },
+  "America/Santiago": { country: "CL", code: "+56", region: "latam" },
+  "America/Lima": { country: "PE", code: "+51", region: "latam" },
+  "America/Caracas": { country: "VE", code: "+58", region: "latam" },
+  "America/Montevideo": { country: "UY", code: "+598", region: "latam" },
+  "America/Asuncion": { country: "PY", code: "+595", region: "latam" },
+  "America/La_Paz": { country: "BO", code: "+591", region: "latam" },
+  "America/Guayaquil": { country: "EC", code: "+593", region: "latam" },
+  // North America
+  "America/New_York": { country: "US", code: "+1", region: "north_america" },
+  "America/Chicago": { country: "US", code: "+1", region: "north_america" },
+  "America/Denver": { country: "US", code: "+1", region: "north_america" },
+  "America/Los_Angeles": { country: "US", code: "+1", region: "north_america" },
+  "America/Phoenix": { country: "US", code: "+1", region: "north_america" },
+  "America/Anchorage": { country: "US", code: "+1", region: "north_america" },
+  "Pacific/Honolulu": { country: "US", code: "+1", region: "north_america" },
+  "America/Toronto": { country: "CA", code: "+1", region: "north_america" },
+  "America/Vancouver": { country: "CA", code: "+1", region: "north_america" },
+  "America/Edmonton": { country: "CA", code: "+1", region: "north_america" },
+  "America/Winnipeg": { country: "CA", code: "+1", region: "north_america" },
+  "America/Halifax": { country: "CA", code: "+1", region: "north_america" },
+  // Europe
+  "Europe/Lisbon": { country: "PT", code: "+351", region: "europe" },
+  "Europe/London": { country: "GB", code: "+44", region: "europe" },
+  "Europe/Madrid": { country: "ES", code: "+34", region: "europe" },
+  "Europe/Paris": { country: "FR", code: "+33", region: "europe" },
+  "Europe/Berlin": { country: "DE", code: "+49", region: "europe" },
+  "Europe/Rome": { country: "IT", code: "+39", region: "europe" },
+  "Europe/Amsterdam": { country: "NL", code: "+31", region: "europe" },
+  "Europe/Zurich": { country: "CH", code: "+41", region: "europe" },
+  "Europe/Dublin": { country: "IE", code: "+353", region: "europe" },
+  "Europe/Brussels": { country: "BE", code: "+32", region: "europe" },
+  "Europe/Vienna": { country: "AT", code: "+43", region: "europe" },
+  "Europe/Warsaw": { country: "PL", code: "+48", region: "europe" },
+  // Asia/Others
+  "Asia/Dubai": { country: "AE", code: "+971", region: "asia" },
+  "Asia/Tokyo": { country: "JP", code: "+81", region: "asia" },
+  "Asia/Shanghai": { country: "CN", code: "+86", region: "asia" },
+  "Asia/Kolkata": { country: "IN", code: "+91", region: "asia" },
+  "Asia/Singapore": { country: "SG", code: "+65", region: "asia" },
+  "Australia/Sydney": { country: "AU", code: "+61", region: "other" },
+  "Australia/Melbourne": { country: "AU", code: "+61", region: "other" },
+};
+
+function detectGeoContext(): GeoContext {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const match = TIMEZONE_COUNTRY_MAP[tz];
+    if (match) {
+      return { country: match.country, countryCode: match.code, region: match.region, timezone: tz };
+    }
+    // Fallback: infer region from timezone prefix
+    if (tz.startsWith("America/")) return { country: "XX", countryCode: "", region: "latam", timezone: tz };
+    if (tz.startsWith("Europe/")) return { country: "XX", countryCode: "", region: "europe", timezone: tz };
+    if (tz.startsWith("Asia/")) return { country: "XX", countryCode: "", region: "asia", timezone: tz };
+    return { country: "XX", countryCode: "", region: "other", timezone: tz };
+  } catch {
+    return { country: "XX", countryCode: "", region: "other", timezone: "unknown" };
+  }
+}
 
 interface ChatState {
   step: AgentStep;
@@ -31,6 +117,7 @@ export const AgentWidget: React.FC = () => {
   const { isAgentOpen, openAgent, closeAgent } = useRouter();
   const [hasOpened, setHasOpened] = useState(false);
   const [inputValue, setInputValue] = useState("");
+  const geoContext = useMemo(() => detectGeoContext(), []);
 
   const [chatState, setChatState] = useState<ChatState>(() => {
     let sessionId = sessionStorage.getItem("aifp_session_id") || undefined;
@@ -78,6 +165,7 @@ export const AgentWidget: React.FC = () => {
   }, [chatState]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Initialize messages on first load or when language changes (if still on step INIT/NAME)
   useEffect(() => {
@@ -116,6 +204,13 @@ export const AgentWidget: React.FC = () => {
   useEffect(() => {
     if (isAgentOpen) scrollToBottom();
   }, [chatState.messages, isAgentOpen, chatState.isTyping]);
+
+  // Auto-focus input after agent finishes typing
+  useEffect(() => {
+    if (!chatState.isTyping && isAgentOpen && chatState.step !== AgentStep.DONE) {
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
+  }, [chatState.isTyping, isAgentOpen, chatState.step]);
 
   useEffect(() => {
     const handleOpenAgent = () => {
@@ -194,7 +289,8 @@ export const AgentWidget: React.FC = () => {
 
     // Detect contact info for Abandoned Cart watcher
     const emailMatch = input.match(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/);
-    const phoneMatch = input.match(/\b(\+?55\s?)?\(?\d{2}\)?\s?\d{4,5}[-.\s]?\d{4}\b/);
+    // International phone regex: +country code + 7-15 digits (with optional separators)
+    const phoneMatch = input.match(/(?:\+\d{1,4}[\s.-]?)?\(?\d{1,4}\)?[\s.-]?\d{3,5}[\s.-]?\d{3,5}\b/);
 
     const hasEmail = !!emailMatch;
     const hasPhone = !!phoneMatch;
@@ -278,7 +374,47 @@ export const AgentWidget: React.FC = () => {
         const triggerWatcher = (hasEmail || hasPhone) && !sessionStorage.getItem('watcherDisparado');
         if (triggerWatcher) {
           sessionStorage.setItem('watcherDisparado', 'true');
-          console.log('[Aria] Primeiro contato detectado — sinalizando watcher para N8N');
+          console.log('[Aria] Primeiro contato detectado — criando lead + carrinho no Supabase');
+        }
+
+        // FIX: Criar lead + carrinho LOCALMENTE no Supabase antes de chamar N8N
+        // N8N recebe o leadId real para automações (notificação, follow-up)
+        // mas a fonte de verdade é o Supabase, não o N8N
+        if (triggerWatcher && !currentLeadData.id) {
+          const lastLeadSubmitN8n = localStorage.getItem("aifp_last_lead_submit");
+          const nowLeadN8n = Date.now();
+          if (!lastLeadSubmitN8n || nowLeadN8n - parseInt(lastLeadSubmitN8n) > 60000) {
+            localStorage.setItem("aifp_last_lead_submit", nowLeadN8n.toString());
+            try {
+              const lead = await db.createLead({
+                name: currentLeadData.name || "Visitante",
+                email: currentLeadData.email,
+                phone: currentLeadData.phone,
+              });
+              currentLeadData.id = lead.id;
+              setChatState((prev) => ({ ...prev, leadData: { ...prev.leadData, id: lead.id } }));
+
+              // Cria carrinho perdido — será removido quando intake for completo
+              await db.createAbandonedCart(lead.id);
+              console.log('[Aria] Lead + carrinho_perdido criados no Supabase:', lead.id);
+            } catch (e) {
+              console.error('[Aria] Erro ao criar lead/carrinho localmente:', e);
+            }
+          }
+        } else if (currentLeadData.id && leadUpdated) {
+          // Lead já existe — atualizar com novos dados (email/phone adicionais)
+          try {
+            const updateData: Record<string, string> = {};
+            if (currentLeadData.email) updateData.email = currentLeadData.email;
+            if (currentLeadData.phone) updateData.phone = currentLeadData.phone;
+            if (Object.keys(updateData).length > 0) {
+              await db.updateLead(currentLeadData.id, updateData);
+            }
+            // Garante que carrinho existe se ainda não tem projeto
+            await db.createAbandonedCart(currentLeadData.id);
+          } catch (e) {
+            console.error('[Aria] Erro ao atualizar lead:', e);
+          }
         }
 
         const response = await fetch(n8nWebhookUrl, {
@@ -289,27 +425,37 @@ export const AgentWidget: React.FC = () => {
             isNewSession: isNewSession,
             triggerWatcher,
             message: input,
+            language: language,
             leadData: currentLeadData,
             nome: currentLeadData.name || "",
             email: currentLeadData.email || "",
             leadId: currentLeadData.id || "",
+            geo: geoContext,
           }),
         });
 
         const data = await response.json();
-        console.log('[Aria] Resposta do N8N:', JSON.stringify(data)); // Log completo para debug
+        console.log('[Aria] Resposta do N8N:', JSON.stringify(data));
 
         // Lê data.reply primeiro (campo retornado pelo nó Edit Fields do N8N)
         const agentReply = data.reply || data.output || data.message || data.response || "Desculpe, não consegui processar sua mensagem.";
 
-        // Atualiza leadData se a IA retornar dados do lead
-        if (data.nome || data.email || data.leadId) {
-          currentLeadData = {
-            ...currentLeadData,
-            ...(data.nome && { name: data.nome }),
-            ...(data.email && { email: data.email }),
-            ...(data.leadId && { id: data.leadId }),
-          };
+        // Atualiza leadData se a IA retornar dados extras do lead
+        if (data.nome || data.email) {
+          const updates: Record<string, string> = {};
+          if (data.nome && data.nome !== currentLeadData.name) {
+            currentLeadData.name = data.nome;
+            updates.name = data.nome;
+          }
+          if (data.email && data.email !== currentLeadData.email) {
+            currentLeadData.email = data.email;
+            updates.email = data.email;
+          }
+          if (Object.keys(updates).length > 0 && currentLeadData.id) {
+            try {
+              await db.updateLead(currentLeadData.id, updates);
+            } catch (e) {}
+          }
           setChatState(prev => ({
             ...prev,
             leadData: currentLeadData,
@@ -317,14 +463,14 @@ export const AgentWidget: React.FC = () => {
         }
 
         // Quando intake completo — remove carrinho abandonado e cria projeto real
-        // isComplete === true é retornado pelo N8N apenas quando Aria coleta TODOS os dados
+        // isComplete === true é retornado pelo N8N APENAS quando Aria coleta TODOS os dados
         if (data.isComplete === true) {
-          const leadId = data.leadId || currentLeadData.id;
+          const leadId = currentLeadData.id;
           console.log('[Aria] Intake completo! leadId:', leadId, '| sessionId:', chatState.sessionId);
           if (leadId && chatState.sessionId) {
             try {
               await db.completeIntake(chatState.sessionId, { lead_id: leadId });
-              console.log('[Aria] completeIntake executado com sucesso');
+              console.log('[Aria] completeIntake executado — carrinho_perdido removido, entrada_lead criado');
             } catch (e) {
               console.error('[Aria] Erro ao finalizar intake:', e);
             }
@@ -626,6 +772,7 @@ export const AgentWidget: React.FC = () => {
                 className="relative flex items-center"
               >
                 <input
+                  ref={inputRef}
                   type={
                     chatState.step === AgentStep.EMAIL
                       ? "email"
@@ -637,7 +784,7 @@ export const AgentWidget: React.FC = () => {
                   onChange={(e) => setInputValue(e.target.value)}
                   disabled={chatState.isTyping}
                   placeholder={t("agent.placeholder")}
-                  className="w-full bg-slate-100 border-transparent rounded-full py-3 pl-4 pr-12 text-sm focus:bg-white focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none transition-all disabled:opacity-50"
+                  className="w-full bg-slate-100 border-transparent rounded-full py-3 pl-4 pr-12 text-sm text-zinc-900 placeholder:text-zinc-400 focus:bg-white focus:border-brand-500 focus:ring-2 focus:ring-brand-200 outline-none transition-all disabled:opacity-50"
                 />
                 <button
                   type="submit"

@@ -509,8 +509,16 @@ class SupabaseDatabase {
   async getLeadsWithDetails(page: number = 1, limit: number = 10) {
     const offset = (page - 1) * limit;
 
+    // Busca lead_ids que ainda estao em carrinho_perdido (nao devem aparecer em Leads & Intakes)
+    const { data: abandonedProjects } = await supabase
+      .from("projects")
+      .select("lead_id")
+      .eq("status", "carrinho_perdido");
+
+    const abandonedLeadIds = (abandonedProjects || []).map((p: any) => p.lead_id);
+
     // Relacionamento PostgREST: Traz o Lead e a Sessão de Intake em uma única query
-    const { data, error, count } = await supabase
+    let query = supabase
       .from("leads")
       .select(
         `
@@ -518,7 +526,14 @@ class SupabaseDatabase {
         session:intake_sessions(*)
       `,
         { count: "exact" },
-      )
+      );
+
+    // Exclui leads com carrinho_perdido (esses ficam na tela de Carrinhos Abandonados)
+    if (abandonedLeadIds.length > 0) {
+      query = query.not("id", "in", `(${abandonedLeadIds.join(",")})`);
+    }
+
+    const { data, error, count } = await query
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1);
 
