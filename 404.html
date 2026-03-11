@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- SEO Primary Meta Tags -->
+    <title>AI For Purpose | Automação com Propósito e Agentes Inteligentes</title>
+    <meta name="title" content="AI For Purpose | Automação com Propósito e Agentes Inteligentes" />
+    <meta name="description" content="Aumente vendas e reduza custos com agentes de atendimento 24/7 e automação de processos inteligentes. Faça um orçamento em minutos." />
+    <meta name="keywords" content="automação com IA, agente de atendimento, agente de voz, integração com CRM, automação de vendas, orçamento de automação" />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://aiforpurpose.com/" />
+    <meta property="og:title" content="AI For Purpose | Automação com Propósito" />
+    <meta property="og:description" content="Agentes inteligentes que aumentam vendas e reduzem tarefas repetitivas. Atendimento 24/7." />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              brand: {
+                50:  '#f0ffe0',
+                100: '#d9ffa8',
+                200: '#c2ff6e',
+                300: '#a8ff3e',
+                400: '#8ae620',
+                500: '#6fcf00',
+                600: '#55a300',
+                700: '#3c7200',
+                800: '#264600',
+                900: '#142500',
+              }
+            },
+            fontFamily: {
+              display: ['Plus Jakarta Sans', 'sans-serif'],
+              sans: ['DM Sans', 'sans-serif'],
+              mono: ['Space Mono', 'monospace'],
+            },
+            animation: {
+              'ticker':   'ticker 40s linear infinite',
+              'fade-up':  'fadeUp 0.7s ease forwards',
+              'fade-in':  'fadeIn 0.5s ease forwards',
+              'blink':    'blink 1.4s ease-in-out infinite',
+              'pulse-slow': 'pulse 3s cubic-bezier(0.4,0,0.6,1) infinite',
+              'glow-pulse': 'glowPulse 4s ease-in-out infinite',
+              'float': 'float 6s ease-in-out infinite',
+            },
+            keyframes: {
+              ticker: {
+                '0%':   { transform: 'translateX(0)' },
+                '100%': { transform: 'translateX(-50%)' },
+              },
+              fadeUp: {
+                '0%':   { opacity: '0', transform: 'translateY(28px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+              },
+              fadeIn: {
+                '0%':   { opacity: '0' },
+                '100%': { opacity: '1' },
+              },
+              blink: {
+                '0%, 100%': { opacity: '1' },
+                '50%':      { opacity: '0.2' },
+              },
+              glowPulse: {
+                '0%, 100%': { opacity: '0.4', transform: 'scale(1)' },
+                '50%': { opacity: '0.8', transform: 'scale(1.05)' },
+              },
+              float: {
+                '0%, 100%': { transform: 'translateY(0)' },
+                '50%': { transform: 'translateY(-10px)' },
+              },
+            },
+          }
+        }
+      }
+    </script>
+    <style>
+      /* Scrollbar hidden for widget */
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+      /* Grid texture */
+      .grid-bg {
+        background-image:
+          linear-gradient(to right,  rgba(255,255,255,0.04) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255,255,255,0.04) 1px, transparent 1px);
+        background-size: 64px 64px;
+      }
+
+      /* Fade-up animation helpers */
+      .anim-hidden { opacity: 0; }
+      .stagger-1 { animation-delay: 0.05s; }
+      .stagger-2 { animation-delay: 0.15s; }
+      .stagger-3 { animation-delay: 0.25s; }
+      .stagger-4 { animation-delay: 0.35s; }
+      .stagger-5 { animation-delay: 0.45s; }
+
+      /* Ticker pause on hover */
+      .ticker-wrap:hover .ticker-track { animation-play-state: paused; }
+
+      /* Clip path for accent bar */
+      .clip-diagonal {
+        clip-path: polygon(0 0, 100% 0, 96% 100%, 0% 100%);
+      }
+      /* Glow orb for hero */
+      .glow-orb {
+        background: radial-gradient(circle, rgba(168, 255, 62, 0.15) 0%, rgba(168, 255, 62, 0.02) 50%, transparent 70%);
+      }
+      /* Card hover glow */
+      .card-glow { transition: all 0.3s ease; }
+      .card-glow:hover {
+        box-shadow: 0 0 30px rgba(168, 255, 62, 0.08), 0 0 60px rgba(168, 255, 62, 0.04);
+        border-color: rgba(168, 255, 62, 0.2);
+      }
+      /* Timeline connector */
+      .timeline-dot { box-shadow: 0 0 0 4px rgba(24, 24, 27, 1), 0 0 0 6px rgba(168, 255, 62, 0.3); }
+      /* Quote marks */
+      .quote-mark { font-family: Georgia, serif; font-size: 6rem; line-height: 1; color: rgba(168, 255, 62, 0.15); }
+    </style>
+    <link rel="stylesheet" href="/index.css">
+    <script type="module" crossorigin src="/AiForPurpose/assets/index-ho5-cFvA.js"></script>
+  </head>
+  <body class="bg-zinc-950 text-white antialiased selection:bg-brand-300 selection:text-zinc-950 font-sans">
+    <div id="root"></div>
+  </body>
+</html>
