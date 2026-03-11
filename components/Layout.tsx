@@ -84,6 +84,13 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               </select>
 
               <button
+                onClick={() => navigate('#/admin')}
+                className="text-zinc-400 hover:text-white font-medium text-sm transition-colors tracking-wide"
+              >
+                Dashboard
+              </button>
+
+              <button
                 onClick={openQuote}
                 className="px-5 py-2.5 bg-brand-300 text-zinc-950 font-display font-bold text-sm hover:bg-brand-200 transition-colors tracking-wide"
               >
@@ -102,6 +109,12 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 <option value="pt" className="bg-zinc-900">PT</option>
                 <option value="es" className="bg-zinc-900">ES</option>
               </select>
+              <button
+                onClick={() => navigate('#/admin')}
+                className="text-zinc-400 hover:text-white text-xs font-mono font-bold uppercase tracking-wider transition-colors"
+              >
+                Dash
+              </button>
               <button
                 onClick={() => setMobileOpen(!mobileOpen)}
                 className="text-zinc-400 hover:text-white p-1 transition-colors"

@@ -120,36 +120,15 @@ export const AgentWidget: React.FC = () => {
   const geoContext = useMemo(() => detectGeoContext(), []);
 
   const [chatState, setChatState] = useState<ChatState>(() => {
-    let sessionId = sessionStorage.getItem("aifp_session_id") || undefined;
-    const lastActivity = sessionStorage.getItem("aifp_last_activity");
-    const now = Date.now();
+    // Sempre inicia sessão nova no carregamento da página (refresh = conversa limpa)
+    sessionStorage.removeItem("aifp_session_id");
+    sessionStorage.removeItem("aifp_last_activity");
+    sessionStorage.removeItem("watcherDisparado");
+    sessionStorage.removeItem("aifp_chat_state");
 
-    // Se passou mais de 1 hora (3600000 ms) desde a última atividade, cria nova sessão
-    if (sessionId && lastActivity && now - parseInt(lastActivity) > 3600000) {
-      sessionStorage.removeItem("aifp_session_id");
-      sessionStorage.removeItem("aifp_last_activity");
-      sessionStorage.removeItem("watcherDisparado");
-      sessionStorage.removeItem("aifp_chat_state");
-      sessionId = undefined;
-    }
-
-    if (!sessionId) {
-      sessionId = crypto.randomUUID();
-      sessionStorage.setItem("aifp_session_id", sessionId);
-      sessionStorage.setItem("aifp_last_activity", now.toString());
-    }
-
-    const savedState = sessionStorage.getItem("aifp_chat_state");
-    if (savedState && sessionId) {
-      try {
-        const parsed = JSON.parse(savedState);
-        if (parsed.sessionId === sessionId) {
-          return { ...parsed, isTyping: false }; // Reset isTyping on reload
-        }
-      } catch (e) {
-        console.error("Failed to parse saved chat state", e);
-      }
-    }
+    const sessionId = crypto.randomUUID();
+    sessionStorage.setItem("aifp_session_id", sessionId);
+    sessionStorage.setItem("aifp_last_activity", Date.now().toString());
 
     return {
       step: AgentStep.INIT,
@@ -517,29 +496,11 @@ export const AgentWidget: React.FC = () => {
         setChatState((prev) => ({
           ...prev,
           leadData: { ...prev.leadData, name: input },
-          step: AgentStep.COMPANY,
-        }));
-        await simulateTyping(
-          t("agent.askCompany", { name: input.split(" ")[0] }),
-        );
-        break;
-
-      case AgentStep.COMPANY:
-        setChatState((prev) => ({
-          ...prev,
-          leadData: { ...prev.leadData, company: input },
-          step: AgentStep.ROLE,
-        }));
-        await simulateTyping(t("agent.askRole", { company: input }));
-        break;
-
-      case AgentStep.ROLE:
-        setChatState((prev) => ({
-          ...prev,
-          leadData: { ...prev.leadData, role: input },
           step: AgentStep.EMAIL,
         }));
-        await simulateTyping(t("agent.askEmail"));
+        await simulateTyping(
+          t("agent.askEmail", { name: input.split(" ")[0] }),
+        );
         break;
 
       case AgentStep.EMAIL:
@@ -559,7 +520,7 @@ export const AgentWidget: React.FC = () => {
         setChatState((prev) => ({
           ...prev,
           leadData: { ...prev.leadData, phone: input },
-          step: AgentStep.BOTTLENECK,
+          step: AgentStep.ROLE,
         }));
 
         // Rate limiting for lead creation: block if created less than 60 seconds ago
@@ -567,17 +528,15 @@ export const AgentWidget: React.FC = () => {
         const now = Date.now();
         if (lastLeadSubmit && now - parseInt(lastLeadSubmit) < 60000) {
           console.warn("Rate limit exceeded for lead creation.");
-          await simulateTyping(t("agent.askBottleneck")); // Continue flow without creating duplicate lead
+          await simulateTyping(t("agent.askBottleneck", { name: leadData.name?.split(" ")[0] }));
           break;
         }
         localStorage.setItem("aifp_last_lead_submit", now.toString());
 
-        // In background, create lead and session since we have basic contact info now
+        // Create lead and session — we have name + email + phone
         try {
           const lead = await db.createLead({
             name: leadData.name,
-            company: leadData.company,
-            role: leadData.role,
             email: leadData.email,
             phone: input,
           });
@@ -593,12 +552,29 @@ export const AgentWidget: React.FC = () => {
           for (const m of chatState.messages) {
             await db.saveMessage(session.id, m.sender, m.message);
           }
-          await db.saveMessage(session.id, "user", input); // save current input
+          await db.saveMessage(session.id, "user", input);
         } catch (e) {
           console.error("Error creating lead", e);
         }
 
-        await simulateTyping(t("agent.askBottleneck"));
+        await simulateTyping(t("agent.askRole"));
+        break;
+
+      case AgentStep.ROLE:
+        setChatState((prev) => ({
+          ...prev,
+          leadData: { ...prev.leadData, role: input },
+          step: AgentStep.BOTTLENECK,
+        }));
+        // Update lead with role if already created
+        if (chatState.leadData.id) {
+          try {
+            await db.updateLead(chatState.leadData.id, { role: input });
+          } catch (e) {
+            console.error("Error updating lead role", e);
+          }
+        }
+        await simulateTyping(t("agent.askBottleneck", { name: leadData.name?.split(" ")[0] }));
         break;
 
       case AgentStep.BOTTLENECK:
